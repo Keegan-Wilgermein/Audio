@@ -1,3 +1,5 @@
-/.vscode
 /build.rs
+*.DS_Store
 /target
+/.vscode
+*.bin
