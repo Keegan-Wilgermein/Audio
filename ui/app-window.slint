@@ -1,17 +1,416 @@
-import { Button, VerticalBox } from "std-widgets.slint";
+import { ScrollView } from "std-widgets.slint";
+
+struct Preset {
+    name: string,
+    desc: string,
+    bass: int,
+    vocals: int,
+    treble: int,
+    gain: int,
+    reverb: int,
+    crush: int,
+}
+
+struct Recording {
+    name: string,
+    length: string,
+}
 
 export component AppWindow inherits Window {
-    in-out property <int> counter: 42;
-    callback request-increase-value();
-    VerticalBox {
-        Text {
-            text: "Counter: \{root.counter}";
+    // Window setup and settings
+    title: "audio";
+
+    // -------- Variables --------
+    private property <[[string]]> dials: [["Bass", "Vocals", "Treble"], ["Gain", "Reverb", "Crush"]];
+    private property <[Preset]> presets: [
+    {name: "Preset one", desc: "Random information one", bass: 0, vocals: 0, treble: 0, gain: 0, reverb: 0, crush: 0},
+    {name: "Preset two", desc: "Random information two", bass: 0, vocals: 0, treble: 0, gain: 0, reverb: 0, crush: 0},
+    {name: "Preset three", desc: "Random information three", bass: 0, vocals: 0, treble: 0, gain: 0, reverb: 0, crush: 0},
+    {name: "Preset four", desc: "Random information four", bass: 0, vocals: 0, treble: 0, gain: 0, reverb: 0, crush: 0}];
+    private property <[int]> dial_values: [0, 0, 0, 0, 0, 0];
+    private property <[Recording]> recordings: [
+    {name: "Recording one", length: "00:00:23"},
+    {name: "Recording two", length: "00:01:04"},
+    {name: "Recording three", length: "00:21:00"},
+    {name: "Recording four", length: "00:00:12"}];
+    private property <[string]> playback_group_one: ["Overwrite", "Save new"];
+    
+    private property <int> current_preset: 0;
+    private property <bool> playing: false;
+    private property <bool> recording: false;
+
+    // App layout
+    HorizontalLayout {
+        spacing: 32px;
+        padding: 12px;
+
+        // Audio dials
+        VerticalLayout {
+            spacing: 12px;
+            
+            for group[index] in dials:
+            HorizontalLayout {
+                spacing: 12px;
+
+                for dial[index2] in group:
+                Rectangle {
+                    border-width: 1px;
+                    border-color: #ffffff;
+                    border-radius: 12px;
+                    background: #242424;
+                    drop-shadow-color: #151515;
+                    drop-shadow-blur: 8px;
+                    drop-shadow-offset-x: 6px;
+                    drop-shadow-offset-y: 6px;
+                    
+                    VerticalLayout {
+                        padding: 12px;
+                        spacing: 12px;
+                        alignment: center;
+    
+                        Text {
+                            text: dial;
+                            font-weight: 700;
+                            vertical-alignment: center;
+                            horizontal-alignment: center;
+                        }
+
+                        HorizontalLayout {
+                            alignment: center;
+
+                            Rectangle {
+                                border-width: 2px;
+                                border-color: #ffffff;
+                                border-radius: 100px;
+                                background: #242424;
+                                drop-shadow-color: #151515;
+                                drop-shadow-blur: 8px;
+                                drop-shadow-offset-x: 6px;
+                                drop-shadow-offset-y: 6px;
+                                height: 60px;
+                                width: 60px;
+    
+                                HorizontalLayout {
+                                    padding-top: 12px;
+                                    alignment: center;
+    
+                                    Image {
+                                        source: @image-url("icons/dial.svg");
+                                        height: 40px;
+                                        width: 60px;
+                                    }
+                                }
+                            }
+                        }
+    
+                        Text {
+                            text: dial_values[index2];
+                            vertical-alignment: center;
+                            horizontal-alignment: center;
+                        }
+                    }
+                }
+            }
         }
 
-        Button {
-            text: "Increase value";
-            clicked => {
-                root.request-increase-value();
+        // Presets, recordings, and playback controls
+        VerticalLayout {
+            spacing: 12px;
+
+            HorizontalLayout {
+                spacing: 32px;
+
+                // Presets
+                VerticalLayout {
+                    spacing: 12px;
+
+                    Text {
+                        text: "Presets";
+                        font-size: 16px;
+                        font-weight: 700;
+                    }
+
+                    ScrollView {
+                        vertical-scrollbar-policy: always-off;
+                        
+                        VerticalLayout {
+                            alignment: start;
+                            spacing: 16px;
+
+                            for preset[index] in presets:
+                            VerticalLayout {
+                                spacing: 4px;
+                                alignment: start;
+    
+                                Text {
+                                    text: preset.name;
+                                    font-weight: 700;
+                                    overflow: elide;
+                                }
+        
+                                Text {
+                                    text: preset.desc;
+                                    overflow: elide;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Recordings
+                VerticalLayout {
+                    spacing: 12px;
+
+                    Text {
+                        text: "Recordings";
+                        font-size: 16px;
+                        font-weight: 700;
+                    }
+
+                    ScrollView {
+                        vertical-scrollbar-policy: always-off;
+
+                        VerticalLayout {
+                            alignment: start;
+                            spacing: 16px;
+
+                            for recording[index] in recordings:
+                            HorizontalLayout {
+                                spacing: 8px;
+                                alignment: start;
+        
+                                VerticalLayout {
+                                    spacing: 4px;
+        
+                                    Text {
+                                        text: recording.name;
+                                        font-weight: 700;
+                                        overflow: elide;
+                                    }
+            
+                                    Text {
+                                        text: recording.length;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Playback controls
+            VerticalLayout {
+                spacing: 12px;
+                height: 0%;
+
+                // Control group one
+                HorizontalLayout {
+                    spacing: 12px;
+
+                    TouchArea {
+                        mouse-cursor: pointer;
+                        enabled: !recording;
+
+                        Rectangle {
+                            border-width: 1px;
+                            border-radius: 8px;
+                            border-color: #ffffff;
+                            background: #242424;
+                            drop-shadow-color: #101010;
+                            drop-shadow-blur: 8px;
+                            drop-shadow-offset-x: 4px;
+                            drop-shadow-offset-y: 4px;
+    
+                            HorizontalLayout {
+                                padding: 12px;
+                                alignment: center;
+    
+                                Image {
+                                    source: @image-url("icons/file-text.svg");
+                                    width: 20px;
+                                    height: 20px;
+                                    colorize: recording ? #5d5d5d : #ffffff;
+                                }
+                            }
+                        }
+                    }
+
+                    TouchArea {
+                        mouse-cursor: pointer;
+                        enabled: !recording;
+
+                        Rectangle {
+                            border-width: 1px;
+                            border-radius: 8px;
+                            border-color: #ffffff;
+                            background: #242424;
+                            drop-shadow-color: #101010;
+                            drop-shadow-blur: 8px;
+                            drop-shadow-offset-x: 4px;
+                            drop-shadow-offset-y: 4px;
+    
+                            HorizontalLayout {
+                                padding: 12px;
+                                alignment: center;
+    
+                                Image {
+                                    source: @image-url("icons/file-plus.svg");
+                                    width: 20px;
+                                    height: 20px;
+                                    colorize: recording ? #5d5d5d : #ffffff;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Control group two
+                HorizontalLayout {
+                    spacing: 12px;
+
+                    TouchArea {
+                        mouse-cursor: pointer;
+                        enabled: !recording;
+
+                        Rectangle {
+                            border-width: 1px;
+                            border-radius: 8px;
+                            border-color: #ffffff;
+                            background: #242424;
+                            drop-shadow-color: #101010;
+                            drop-shadow-blur: 8px;
+                            drop-shadow-offset-x: 4px;
+                            drop-shadow-offset-y: 4px;
+                            min-width: 100px;
+    
+                            HorizontalLayout {
+                                padding: 12px;
+                                alignment: center;
+    
+                                Image {
+                                    source: @image-url("icons/rewind.svg");
+                                    width: 20px;
+                                    height: 20px;
+                                    colorize: recording ? #5d5d5d : #ffffff;
+                                }
+                            }
+                        }
+                    }
+
+                    TouchArea {
+                        mouse-cursor: pointer;
+                        enabled: !recording;
+
+                        Rectangle {
+                            border-width: 1px;
+                            border-radius: 8px;
+                            border-color: #ffffff;
+                            background: #242424;
+                            drop-shadow-color: #101010;
+                            drop-shadow-blur: 8px;
+                            drop-shadow-offset-x: 4px;
+                            drop-shadow-offset-y: 4px;
+                            min-width: 100px;
+    
+                            HorizontalLayout {
+                                padding: 12px;
+                                alignment: center;
+    
+                                if playing:
+                                Image {
+                                    source: @image-url("icons/pause.svg");
+                                    width: 20px;
+                                    height: 20px;
+                                    colorize: recording ? #5d5d5d : #ffffff;
+                                }
+        
+                                if !playing:
+                                Image {
+                                    source: @image-url("icons/play.svg");
+                                    width: 20px;
+                                    height: 20px;
+                                    colorize: recording ? #5d5d5d : #ffffff;
+                                }
+                            }
+                        }
+
+                        clicked => {
+                            playing = !playing;
+                        }
+                    }
+
+                    TouchArea {
+                        mouse-cursor: pointer;
+                        enabled: !recording;
+
+                        Rectangle {
+                            border-width: 1px;
+                            border-radius: 8px;
+                            border-color: #ffffff;
+                            background: #242424;
+                            drop-shadow-color: #101010;
+                            drop-shadow-blur: 8px;
+                            drop-shadow-offset-x: 4px;
+                            drop-shadow-offset-y: 4px;
+                            min-width: 100px;
+    
+                            HorizontalLayout {
+                                padding: 12px;
+                                alignment: center;
+    
+                                Image {
+                                    source: @image-url("icons/next.svg");
+                                    width: 20px;
+                                    height: 20px;
+                                    colorize: recording ? #5d5d5d : #ffffff;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                TouchArea {
+                    mouse-cursor: pointer;
+
+                    Rectangle {
+                        border-width: 1px;
+                        border-radius: 8px;
+                        border-color: #ffffff;
+                        background: #242424;
+                        drop-shadow-color: #101010;
+                        drop-shadow-blur: 8px;
+                        drop-shadow-offset-x: 6px;
+                        drop-shadow-offset-y: 6px;
+    
+                        HorizontalLayout {
+                            padding: 12px;
+                            alignment: center;
+
+                            if recording:
+                            Image {
+                                source: @image-url("icons/stop-circle.svg");
+                                width: 20px;
+                                height: 20px;
+                                colorize: #ec4747;
+                            }
+
+                            if !recording:
+                            Image {
+                                source: @image-url("icons/circle.svg");
+                                width: 20px;
+                                height: 20px;
+                                colorize: #ec4747;
+                            }
+                        }
+                    }
+
+                    clicked => {
+                        recording = !recording;
+                        if recording {
+                            playing = false;
+                        }
+                    }
+                }
             }
         }
     }
