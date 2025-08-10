@@ -2,7 +2,6 @@ import { ScrollView } from "std-widgets.slint";
 
 struct Preset {
     name: string,
-    desc: string,
     bass: int,
     vocals: int,
     treble: int,
@@ -13,7 +12,12 @@ struct Preset {
 
 struct Recording {
     name: string,
-    length: string,
+    bass: int,
+    vocals: int,
+    treble: int,
+    gain: int,
+    reverb: int,
+    crush: int,
 }
 
 export component AppWindow inherits Window {
@@ -22,22 +26,30 @@ export component AppWindow inherits Window {
 
     // -------- Variables --------
     private property <[[string]]> dials: [["Bass", "Vocals", "Treble"], ["Gain", "Reverb", "Crush"]];
+
     private property <[Preset]> presets: [
-    {name: "Preset one", desc: "Random information one", bass: 0, vocals: 0, treble: 0, gain: 0, reverb: 0, crush: 0},
-    {name: "Preset two", desc: "Random information two", bass: 0, vocals: 0, treble: 0, gain: 0, reverb: 0, crush: 0},
-    {name: "Preset three", desc: "Random information three", bass: 0, vocals: 0, treble: 0, gain: 0, reverb: 0, crush: 0},
-    {name: "Preset four", desc: "Random information four", bass: 0, vocals: 0, treble: 0, gain: 0, reverb: 0, crush: 0}];
+    {name: "Preset one", bass: 0, vocals: 0, treble: 0, gain: 0, reverb: 0, crush: 0},
+    {name: "Preset two", bass: 0, vocals: 0, treble: 0, gain: 0, reverb: 0, crush: 0},
+    {name: "Preset three", bass: 0, vocals: 0, treble: 0, gain: 0, reverb: 0, crush: 0},
+    {name: "Preset four", bass: 0, vocals: 0, treble: 0, gain: 0, reverb: 0, crush: 0}];
     private property <[int]> dial_values: [0, 0, 0, 0, 0, 0];
+
     private property <[Recording]> recordings: [
-    {name: "Recording one", length: "00:00:23"},
-    {name: "Recording two", length: "00:01:04"},
-    {name: "Recording three", length: "00:21:00"},
-    {name: "Recording four", length: "00:00:12"}];
-    private property <[string]> playback_group_one: ["Overwrite", "Save new"];
+    {name: "Recording one", bass: 0, vocals: 0, treble: 0, gain: 0, reverb: 0, crush: 0},
+    {name: "Recording two", bass: 0, vocals: 0, treble: 0, gain: 0, reverb: 0, crush: 0},
+    {name: "Recording three", bass: 0, vocals: 0, treble: 0, gain: 0, reverb: 0, crush: 0},
+    {name: "Recording four", bass: 0, vocals: 0, treble: 0, gain: 0, reverb: 0, crush: 0}];
     
     private property <int> current_preset: 0;
+    private property <int> current_recording: 0;
     private property <bool> playing: false;
     private property <bool> recording: false;
+
+    private property <length> snap_by: 10px;
+    private property <length> next_snap: snap_by;
+    private property <length> last_snap: snap_by - snap_by;
+    private property <length> dial_pressed: 0px;
+
 
     // App layout
     HorizontalLayout {
@@ -78,33 +90,62 @@ export component AppWindow inherits Window {
                         HorizontalLayout {
                             alignment: center;
 
-                            Rectangle {
-                                border-width: 2px;
-                                border-color: #ffffff;
-                                border-radius: 100px;
-                                background: #242424;
-                                drop-shadow-color: #151515;
-                                drop-shadow-blur: 8px;
-                                drop-shadow-offset-x: 6px;
-                                drop-shadow-offset-y: 6px;
-                                height: 60px;
-                                width: 60px;
-    
-                                HorizontalLayout {
-                                    padding-top: 12px;
-                                    alignment: center;
-    
-                                    Image {
-                                        source: @image-url("icons/dial.svg");
-                                        height: 40px;
+                            TouchArea {
+                                mouse-cursor: ew-resize;
+
+                                SwipeGestureHandler {
+
+                                    Rectangle {
+                                        border-width: 2px;
+                                        border-color: #ffffff;
+                                        border-radius: 100px;
+                                        background: #242424;
+                                        drop-shadow-color: #151515;
+                                        drop-shadow-blur: 8px;
+                                        drop-shadow-offset-x: 6px;
+                                        drop-shadow-offset-y: 6px;
+                                        height: 60px;
                                         width: 60px;
+            
+                                        HorizontalLayout {
+                                            padding-top: 12px;
+                                            alignment: center;
+            
+                                            Image {
+                                                source: @image-url("icons/dial.svg");
+                                                height: 40px;
+                                                width: 60px;
+                                                rotation-angle: dial_values[index2 + (index * 3)] * 20deg;
+                                            }
+                                        }
+                                    }
+
+                                    moved => {
+                                        if dial_pressed != self.pressed-position.x {
+                                            next_snap = snap_by;
+                                            last_snap = snap_by - snap_by;
+                                            dial_pressed = self.pressed-position.x;
+                                        }
+                                        if self.current-position.x - self.pressed-position.x > next_snap {
+                                            if dial_values[index2 + (index * 3)] < 7 {
+                                                dial_values[index2 + (index * 3)] += 1;
+                                                last_snap = next_snap;
+                                                next_snap += snap_by;
+                                            }
+                                        } else if self.current-position.x - self.pressed-position.x < last_snap {
+                                            if dial_values[index2 + (index * 3)] > -7 {
+                                                dial_values[index2 + (index * 3)] -= 1;
+                                                next_snap = last_snap;
+                                                last_snap -= snap_by;
+                                            }
+                                        }
                                     }
                                 }
                             }
                         }
     
                         Text {
-                            text: dial_values[index2];
+                            text: dial_values[index2 + (index * 3)];
                             vertical-alignment: center;
                             horizontal-alignment: center;
                         }
@@ -149,7 +190,7 @@ export component AppWindow inherits Window {
                                 }
         
                                 Text {
-                                    text: preset.desc;
+                                    text: "\{preset.bass} \{preset.vocals} \{preset.treble} \{preset.gain} \{preset.reverb} \{preset.crush}";
                                     overflow: elide;
                                 }
                             }
@@ -189,7 +230,7 @@ export component AppWindow inherits Window {
                                     }
             
                                     Text {
-                                        text: recording.length;
+                                        text: "\{recording.bass} \{recording.vocals} \{recording.treble} \{recording.gain} \{recording.reverb} \{recording.crush}";
                                     }
                                 }
                             }
@@ -203,68 +244,7 @@ export component AppWindow inherits Window {
                 spacing: 12px;
                 height: 0%;
 
-                // Control group one
-                HorizontalLayout {
-                    spacing: 12px;
-
-                    TouchArea {
-                        mouse-cursor: pointer;
-                        enabled: !recording;
-
-                        Rectangle {
-                            border-width: 1px;
-                            border-radius: 8px;
-                            border-color: #ffffff;
-                            background: #242424;
-                            drop-shadow-color: #101010;
-                            drop-shadow-blur: 8px;
-                            drop-shadow-offset-x: 4px;
-                            drop-shadow-offset-y: 4px;
-    
-                            HorizontalLayout {
-                                padding: 12px;
-                                alignment: center;
-    
-                                Image {
-                                    source: @image-url("icons/file-text.svg");
-                                    width: 20px;
-                                    height: 20px;
-                                    colorize: recording ? #5d5d5d : #ffffff;
-                                }
-                            }
-                        }
-                    }
-
-                    TouchArea {
-                        mouse-cursor: pointer;
-                        enabled: !recording;
-
-                        Rectangle {
-                            border-width: 1px;
-                            border-radius: 8px;
-                            border-color: #ffffff;
-                            background: #242424;
-                            drop-shadow-color: #101010;
-                            drop-shadow-blur: 8px;
-                            drop-shadow-offset-x: 4px;
-                            drop-shadow-offset-y: 4px;
-    
-                            HorizontalLayout {
-                                padding: 12px;
-                                alignment: center;
-    
-                                Image {
-                                    source: @image-url("icons/file-plus.svg");
-                                    width: 20px;
-                                    height: 20px;
-                                    colorize: recording ? #5d5d5d : #ffffff;
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Control group two
+                // Control group
                 HorizontalLayout {
                     spacing: 12px;
 
