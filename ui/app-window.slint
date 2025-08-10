@@ -50,6 +50,8 @@ export component AppWindow inherits Window {
     private property <length> last_snap: snap_by - snap_by;
     private property <length> dial_pressed: 0px;
 
+    private property <bool> deleting_preset: false;
+    private property <bool> deleting_recording: false;
 
     // App layout
     HorizontalLayout {
@@ -165,10 +167,56 @@ export component AppWindow inherits Window {
                 VerticalLayout {
                     spacing: 12px;
 
-                    Text {
-                        text: "Presets";
-                        font-size: 16px;
-                        font-weight: 700;
+                    HorizontalLayout {
+                        alignment: start;
+                        spacing: 8px;
+
+                        Text {
+                            text: "Presets";
+                            font-size: 16px;
+                            font-weight: 700;
+                            vertical-alignment: center;
+                        }
+
+                        TouchArea {
+                            mouse-cursor: pointer;
+
+                            Image {
+                                source: @image-url("icons/plus.svg");
+                                width: 20px;
+                                height: 20px;
+                            }
+                        }
+
+                        if deleting_preset:
+                        TouchArea {
+                            mouse-cursor: pointer;
+
+                            Image {
+                                source: @image-url("icons/check.svg");
+                                width: 16px;
+                                height: 16px;
+                            }
+
+                            clicked => {
+                                deleting_preset = !deleting_preset;
+                            }
+                        }
+
+                        if !deleting_preset:
+                        TouchArea {
+                            mouse-cursor: pointer;
+
+                            Image {
+                                source: @image-url("icons/trash.svg");
+                                width: 16px;
+                                height: 16px;
+                            }
+
+                            clicked => {
+                                deleting_preset = !deleting_preset;
+                            }
+                        }
                     }
 
                     ScrollView {
@@ -179,19 +227,37 @@ export component AppWindow inherits Window {
                             spacing: 16px;
 
                             for preset[index] in presets:
-                            VerticalLayout {
-                                spacing: 4px;
-                                alignment: start;
-    
-                                Text {
-                                    text: preset.name;
-                                    font-weight: 700;
-                                    overflow: elide;
-                                }
-        
-                                Text {
-                                    text: "\{preset.bass} \{preset.vocals} \{preset.treble} \{preset.gain} \{preset.reverb} \{preset.crush}";
-                                    overflow: elide;
+                            TouchArea {
+                                mouse-cursor: pointer;
+
+                                Rectangle {
+                                    border-radius: 8px;
+                                    background: deleting_preset ? @linear-gradient(90deg, #dc4242 30%, #ed2e2e00 100%) : #ffffff00;
+
+                                    animate background {
+                                        duration: 0.2s;
+                                    }
+
+                                    VerticalLayout {
+                                        padding: deleting_preset ? 8px: 0px;
+                                        spacing: 4px;
+                                        alignment: start;
+
+                                        animate padding {
+                                            duration: 0.1s;
+                                        }
+            
+                                        Text {
+                                            text: preset.name;
+                                            font-weight: 700;
+                                            overflow: elide;
+                                        }
+                
+                                        Text {
+                                            text: "\{preset.bass} \{preset.vocals} \{preset.treble} \{preset.gain} \{preset.reverb} \{preset.crush}";
+                                            overflow: elide;
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -202,11 +268,47 @@ export component AppWindow inherits Window {
                 VerticalLayout {
                     spacing: 12px;
 
-                    Text {
-                        text: "Recordings";
-                        font-size: 16px;
-                        font-weight: 700;
+                    HorizontalLayout {
+                        alignment: start;
+                        spacing: 8px;
+                        
+                        Text {
+                            text: "Recordings";
+                            font-size: 16px;
+                            font-weight: 700;
+                        }
+
+                        if deleting_recording:
+                        TouchArea {
+                            mouse-cursor: pointer;
+
+                            Image {
+                                source: @image-url("icons/check.svg");
+                                width: 16px;
+                                height: 16px;
+                            }
+
+                            clicked => {
+                                deleting_recording = !deleting_recording;
+                            }
+                        }
+
+                        if !deleting_recording:
+                        TouchArea {
+                            mouse-cursor: pointer;
+
+                            Image {
+                                source: @image-url("icons/trash.svg");
+                                width: 16px;
+                                height: 16px;
+                            }
+
+                            clicked => {
+                                deleting_recording = !deleting_recording;
+                            }
+                        }
                     }
+
 
                     ScrollView {
                         vertical-scrollbar-policy: always-off;
@@ -216,21 +318,34 @@ export component AppWindow inherits Window {
                             spacing: 16px;
 
                             for recording[index] in recordings:
-                            HorizontalLayout {
-                                spacing: 8px;
-                                alignment: start;
-        
-                                VerticalLayout {
-                                    spacing: 4px;
-        
-                                    Text {
-                                        text: recording.name;
-                                        font-weight: 700;
-                                        overflow: elide;
+                            TouchArea {
+                                mouse-cursor: pointer;
+
+                                Rectangle {
+                                    border-radius: 8px;
+                                    background: deleting_recording ? @linear-gradient(90deg, #dc4242 30%, #ed2e2e00 100%) : #ffffff00;
+                                    
+                                    animate background {
+                                        duration: 0.2s;
                                     }
+                
+                                    VerticalLayout {
+                                        padding: deleting_recording ? 8px: 0px;
+                                        spacing: 4px;
+
+                                        animate padding {
+                                            duration: 0.1s;
+                                        }
             
-                                    Text {
-                                        text: "\{recording.bass} \{recording.vocals} \{recording.treble} \{recording.gain} \{recording.reverb} \{recording.crush}";
+                                        Text {
+                                            text: recording.name;
+                                            font-weight: 700;
+                                            overflow: elide;
+                                        }
+                
+                                        Text {
+                                            text: "\{recording.bass} \{recording.vocals} \{recording.treble} \{recording.gain} \{recording.reverb} \{recording.crush}";
+                                        }
                                     }
                                 }
                             }
@@ -272,6 +387,10 @@ export component AppWindow inherits Window {
                                     width: 20px;
                                     height: 20px;
                                     colorize: recording ? #5d5d5d : #ffffff;
+
+                                    animate colorize {
+                                        duration: 0.1s;
+                                    }
                                 }
                             }
                         }
@@ -310,6 +429,10 @@ export component AppWindow inherits Window {
                                     width: 20px;
                                     height: 20px;
                                     colorize: recording ? #5d5d5d : #ffffff;
+
+                                    animate colorize {
+                                        duration: 0.1s;
+                                    }
                                 }
                             }
                         }
@@ -343,6 +466,10 @@ export component AppWindow inherits Window {
                                     width: 20px;
                                     height: 20px;
                                     colorize: recording ? #5d5d5d : #ffffff;
+
+                                    animate colorize {
+                                        duration: 0.1s;
+                                    }
                                 }
                             }
                         }
