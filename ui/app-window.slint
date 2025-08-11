@@ -39,8 +39,7 @@ export component AppWindow inherits Window {
     {name: "Recording two", bass: 0, vocals: 0, treble: 0, gain: 0, reverb: 0, crush: 0},
     {name: "Recording three", bass: 0, vocals: 0, treble: 0, gain: 0, reverb: 0, crush: 0},
     {name: "Recording four", bass: 0, vocals: 0, treble: 0, gain: 0, reverb: 0, crush: 0}];
-    
-    private property <int> current_preset: 0;
+
     private property <int> current_recording: 0;
     private property <bool> playing: false;
     private property <bool> recording: false;
@@ -265,6 +264,21 @@ export component AppWindow inherits Window {
                                             overflow: elide;
                                         }
                                     }
+                                }
+
+                                clicked => {
+                                    dial_values[0] = presets[index].bass;
+                                    dial_values[1] = presets[index].vocals;
+                                    dial_values[2] = presets[index].treble;
+                                    dial_values[3] = presets[index].gain;
+                                    dial_values[4] = presets[index].reverb;
+                                    dial_values[5] = presets[index].crush;
+                                    recordings[current_recording].bass = dial_values[0];
+                                    recordings[current_recording].vocals = dial_values[1];
+                                    recordings[current_recording].treble = dial_values[2];
+                                    recordings[current_recording].gain = dial_values[3];
+                                    recordings[current_recording].reverb = dial_values[4];
+                                    recordings[current_recording].crush = dial_values[5];
                                 }
                             }
                         }
