@@ -209,6 +209,12 @@ export component AppWindow inherits Window {
                                                 last_snap -= snap_by;
                                             }
                                         }
+                                        recordings[current_recording].bass = dial_values[0];
+                                        recordings[current_recording].vocals = dial_values[1];
+                                        recordings[current_recording].treble = dial_values[2];
+                                        recordings[current_recording].gain = dial_values[3];
+                                        recordings[current_recording].reverb = dial_values[4];
+                                        recordings[current_recording].crush = dial_values[5];
                                     }
                                 }
                             }
@@ -312,7 +318,8 @@ export component AppWindow inherits Window {
                                         alignment: start;
 
                                         animate padding {
-                                            duration: 0.1s;
+                                            duration: 0.3s;
+                                            easing: ease-in-out-back;
                                         }
             
                                         Text {
@@ -405,7 +412,8 @@ export component AppWindow inherits Window {
                                         spacing: 4px;
 
                                         animate padding {
-                                            duration: 0.1s;
+                                            duration: 0.3s;
+                                            easing: ease-in-out-back;
                                         }
             
                                         Text {
@@ -415,7 +423,7 @@ export component AppWindow inherits Window {
                                         }
                 
                                         Text {
-                                            text: "\{recording.bass} \{recording.vocals} \{recording.treble} \{recording.gain} \{recording.reverb} \{recording.crush}";
+                                            text: "\{recording.bass}  \{recording.vocals}  \{recording.treble}  \{recording.gain}  \{recording.reverb}  \{recording.crush}";
                                         }
                                     }
                                 }
@@ -423,6 +431,12 @@ export component AppWindow inherits Window {
                                 clicked => {
                                     if !deleting_recording {
                                         current_recording = index;
+                                        dial_values[0] = recordings[current_recording].bass;
+                                        dial_values[1] = recordings[current_recording].vocals;
+                                        dial_values[2] = recordings[current_recording].treble;
+                                        dial_values[3] = recordings[current_recording].gain;
+                                        dial_values[4] = recordings[current_recording].reverb;
+                                        dial_values[5] = recordings[current_recording].crush;
                                     }
                                 }
                             }
