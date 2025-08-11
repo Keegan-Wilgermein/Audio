@@ -419,6 +419,12 @@ export component AppWindow inherits Window {
                                         }
                                     }
                                 }
+
+                                clicked => {
+                                    if !deleting_recording {
+                                        current_recording = index;
+                                    }
+                                }
                             }
                         }
                     }
