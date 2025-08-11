@@ -1,38 +1,34 @@
-# Slint Rust Template
+# Audio
+System wide audio recording, editing, and playback
 
-A template for a Rust application that's using [Slint](https://slint.rs/) for the user interface.
+## How to use
+### Recording
+- Click the red circle icon to start and stop recording
+### Playback
+- Select a recording to play from the list
+- Click the play button to start playback
+- Click the pause button to stop playback
+- Click the rewind button to skip back tracks and to the beginning of the currently playing track
+- Click the next button to skip to the next track
 
-## About
+Recordings can't be played while a recording is in progress
+### Dials
+Dials are used to adjust the way each recording sounds. Each recording saves it's own individual settings which can be saved to a preset
 
-This template helps you get started developing a Rust application with Slint as toolkit
-for the user interface. It demonstrates the integration between the `.slint` UI markup and
-Rust code, how to react to callbacks, get and set properties, and use basic widgets.
+Rotate each dial by clicking and dragging left or right to increase or decrease the value
 
-## Usage
-
-1. Install Rust by following its [getting-started guide](https://www.rust-lang.org/learn/get-started).
-   Once this is done, you should have the `rustc` compiler and the `cargo` build system installed in your `PATH`.
-2. Download and extract the [ZIP archive of this repository](https://github.com/slint-ui/slint-rust-template/archive/refs/heads/main.zip).
-3. Rename the extracted directory and change into it:
-    ```
-    mv slint-rust-template-main my-project
-    cd my-project    
-    ```
-4. Build with `cargo`:
-    ```
-    cargo build
-    ```
-5. Run the application binary:
-    ```
-    cargo run
-    ```
-
-We recommend using an IDE for development, along with our [LSP-based IDE integration for `.slint` files](https://github.com/slint-ui/slint/blob/master/tools/lsp/README.md). You can also load this project directly in [Visual Studio Code](https://code.visualstudio.com) and install our [Slint extension](https://marketplace.visualstudio.com/items?itemName=Slint.slint).
-
-## Next Steps
-
-We hope that this template helps you get started, and that you enjoy exploring making user interfaces with Slint. To learn more
-about the Slint APIs and the `.slint` markup language, check out our [online documentation](https://slint.dev/docs).
-
-Don't forget to edit this readme to replace it by yours, and edit the `name =` field in `Cargo.toml` to match the name of your
-project.
+The avaliable dials can adjust the
+- Bass
+- Vocals
+- Treble
+- Gain
+- Reverb
+- Crush
+### Presets
+Presets allow you to save settings to be quickly applied to other recordings
+- Click the plus icon next to the presets list to save a preset
+- Select a preset in the list to apply its settings to a recording
+### Deleting presets and recordings
+- Click the respective trash icon in each list
+- Select the preset or recording you want to delete
+- Click the respective check icon when done
