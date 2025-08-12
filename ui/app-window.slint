@@ -142,12 +142,6 @@ export component AppWindow inherits Window {
                                                 last_snap -= snap_by;
                                             }
                                         }
-                                        recording_values[current_recording][0] = dial_values[0];
-                                        recording_values[current_recording][1] = dial_values[1];
-                                        recording_values[current_recording][2] = dial_values[2];
-                                        recording_values[current_recording][3] = dial_values[3];
-                                        recording_values[current_recording][4] = dial_values[4];
-                                        recording_values[current_recording][5] = dial_values[5];
 
                                         update_and_save();
                                     }
@@ -284,13 +278,6 @@ export component AppWindow inherits Window {
                                         dial_values[3] = preset[3];
                                         dial_values[4] = preset[4];
                                         dial_values[5] = preset[5];
-
-                                        recording_values[current_recording][0] = dial_values[0];
-                                        recording_values[current_recording][1] = dial_values[1];
-                                        recording_values[current_recording][2] = dial_values[2];
-                                        recording_values[current_recording][3] = dial_values[3];
-                                        recording_values[current_recording][4] = dial_values[4];
-                                        recording_values[current_recording][5] = dial_values[5];
 
                                         update_and_save();
                                     } else {
