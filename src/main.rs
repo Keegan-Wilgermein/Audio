@@ -219,10 +219,11 @@ fn main() -> Result<(), Box<dyn STDError>> {
     // Creates a variable that can be used across threads and move blocks and can be read from without locking
     let data = Arc::new(RwLock::new(match load() {
         Ok(value) => value,
-        Err(_) => Settings::new(),
+        Err(_) => {
+            let _ = save(&Settings::new());
+            Settings::new()
+        },
     }));
-
-    let _ = save(&data.read().unwrap());
 
     ui.on_startup({
         let ui_handle = ui.as_weak();
