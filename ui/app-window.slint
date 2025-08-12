@@ -1,25 +1,5 @@
 import { ScrollView } from "std-widgets.slint";
 
-struct Preset {
-    name: string,
-    bass: int,
-    vocals: int,
-    treble: int,
-    gain: int,
-    reverb: int,
-    crush: int,
-}
-
-struct Recording {
-    name: string,
-    bass: int,
-    vocals: int,
-    treble: int,
-    gain: int,
-    reverb: int,
-    crush: int,
-}
-
 export component AppWindow inherits Window {
     // Window setup and settings
     title: "audio";
@@ -27,20 +7,20 @@ export component AppWindow inherits Window {
     // -------- Variables --------
     private property <[[string]]> dials: [["Bass", "Vocals", "Treble"], ["Gain", "Reverb", "Crush"]];
 
-    private property <[Preset]> presets: [
-    {name: "Preset one", bass: 0, vocals: 0, treble: 0, gain: 0, reverb: 0, crush: 0},
-    {name: "Preset two", bass: 0, vocals: 0, treble: 0, gain: 0, reverb: 0, crush: 0},
-    {name: "Preset three", bass: 0, vocals: 0, treble: 0, gain: 0, reverb: 0, crush: 0},
-    {name: "Preset four", bass: 0, vocals: 0, treble: 0, gain: 0, reverb: 0, crush: 0}];
-    private property <[int]> dial_values: [0, 0, 0, 0, 0, 0];
+    in-out property <[string]> preset_names: [];
+    in-out property <[[int]]> preset_values: [];
+    in-out property <bool> new_preset: false;
+    in-out property <bool> delete_preset: false;
+    out property <int> deleted_preset: 0;
 
-    private property <[Recording]> recordings: [
-    {name: "Recording one", bass: 0, vocals: 0, treble: 0, gain: 0, reverb: 0, crush: 0},
-    {name: "Recording two", bass: 0, vocals: 0, treble: 0, gain: 0, reverb: 0, crush: 0},
-    {name: "Recording three", bass: 0, vocals: 0, treble: 0, gain: 0, reverb: 0, crush: 0},
-    {name: "Recording four", bass: 0, vocals: 0, treble: 0, gain: 0, reverb: 0, crush: 0}];
+    in-out property <[string]> recording_names: [];
+    in-out property <[[int]]> recording_values: [];
+    out property <int> current_recording: 0;
+    out property <int> deleted_recording: 0;
+    in-out property <bool> delete_recording: false;
 
-    private property <int> current_recording: 0;
+    out property <[int]> dial_values: [0, 0, 0, 0, 0, 0];
+
     private property <bool> playing: false;
     private property <bool> recording: false;
 
@@ -52,7 +32,29 @@ export component AppWindow inherits Window {
     private property <bool> deleting_preset: false;
     private property <bool> deleting_recording: false;
 
-    // App layout
+    // -------- Callbacks --------
+    callback startup();
+    callback update_and_save();
+
+    // -------- Timers --------
+    // Loads settings to UI on startup
+    Timer {
+        interval: 0ms;
+        running: true;
+
+        triggered => {
+            self.running = false;
+            startup();
+            dial_values[0] = recording_values[current_recording][0];
+            dial_values[1] = recording_values[current_recording][1];
+            dial_values[2] = recording_values[current_recording][2];
+            dial_values[3] = recording_values[current_recording][3];
+            dial_values[4] = recording_values[current_recording][4];
+            dial_values[5] = recording_values[current_recording][5];
+        }
+    }
+
+    // -------- App layout --------
     HorizontalLayout {
         spacing: 32px;
         padding: 12px;
@@ -140,12 +142,14 @@ export component AppWindow inherits Window {
                                                 last_snap -= snap_by;
                                             }
                                         }
-                                        recordings[current_recording].bass = dial_values[0];
-                                        recordings[current_recording].vocals = dial_values[1];
-                                        recordings[current_recording].treble = dial_values[2];
-                                        recordings[current_recording].gain = dial_values[3];
-                                        recordings[current_recording].reverb = dial_values[4];
-                                        recordings[current_recording].crush = dial_values[5];
+                                        recording_values[current_recording][0] = dial_values[0];
+                                        recording_values[current_recording][1] = dial_values[1];
+                                        recording_values[current_recording][2] = dial_values[2];
+                                        recording_values[current_recording][3] = dial_values[3];
+                                        recording_values[current_recording][4] = dial_values[4];
+                                        recording_values[current_recording][5] = dial_values[5];
+
+                                        update_and_save();
                                     }
                                 }
                             }
@@ -191,6 +195,12 @@ export component AppWindow inherits Window {
                                 width: 20px;
                                 height: 20px;
                             }
+
+                            clicked => {
+                                new_preset = true;
+                                update_and_save();
+                                new_preset = false;
+                            }
                         }
 
                         if deleting_preset:
@@ -231,7 +241,7 @@ export component AppWindow inherits Window {
                             alignment: start;
                             spacing: 16px;
 
-                            for preset[index] in presets:
+                            for preset[index] in preset_values:
                             TouchArea {
                                 mouse-cursor: pointer;
 
@@ -254,31 +264,41 @@ export component AppWindow inherits Window {
                                         }
             
                                         Text {
-                                            text: preset.name;
+                                            text: preset_names[index];
                                             font-weight: 700;
                                             overflow: elide;
                                         }
                 
                                         Text {
-                                            text: "\{preset.bass} \{preset.vocals} \{preset.treble} \{preset.gain} \{preset.reverb} \{preset.crush}";
+                                            text: "\{preset[0]} \{preset[1]} \{preset[2]} \{preset[3]} \{preset[4]} \{preset[5]}";
                                             overflow: elide;
                                         }
                                     }
                                 }
 
                                 clicked => {
-                                    dial_values[0] = presets[index].bass;
-                                    dial_values[1] = presets[index].vocals;
-                                    dial_values[2] = presets[index].treble;
-                                    dial_values[3] = presets[index].gain;
-                                    dial_values[4] = presets[index].reverb;
-                                    dial_values[5] = presets[index].crush;
-                                    recordings[current_recording].bass = dial_values[0];
-                                    recordings[current_recording].vocals = dial_values[1];
-                                    recordings[current_recording].treble = dial_values[2];
-                                    recordings[current_recording].gain = dial_values[3];
-                                    recordings[current_recording].reverb = dial_values[4];
-                                    recordings[current_recording].crush = dial_values[5];
+                                    if !deleting_preset {
+                                        dial_values[0] = preset[0];
+                                        dial_values[1] = preset[1];
+                                        dial_values[2] = preset[2];
+                                        dial_values[3] = preset[3];
+                                        dial_values[4] = preset[4];
+                                        dial_values[5] = preset[5];
+
+                                        recording_values[current_recording][0] = dial_values[0];
+                                        recording_values[current_recording][1] = dial_values[1];
+                                        recording_values[current_recording][2] = dial_values[2];
+                                        recording_values[current_recording][3] = dial_values[3];
+                                        recording_values[current_recording][4] = dial_values[4];
+                                        recording_values[current_recording][5] = dial_values[5];
+
+                                        update_and_save();
+                                    } else {
+                                        deleted_preset = index;
+                                        delete_preset = true;
+                                        update_and_save();
+                                        delete_preset = false;
+                                    }
                                 }
                             }
                         }
@@ -339,7 +359,7 @@ export component AppWindow inherits Window {
                             alignment: start;
                             spacing: 16px;
 
-                            for recording[index] in recordings:
+                            for recording[index] in recording_values:
                             TouchArea {
                                 mouse-cursor: pointer;
 
@@ -363,13 +383,13 @@ export component AppWindow inherits Window {
                                         }
             
                                         Text {
-                                            text: recording.name;
+                                            text: recording_names[index];
                                             font-weight: 700;
                                             overflow: elide;
                                         }
                 
                                         Text {
-                                            text: "\{recording.bass}  \{recording.vocals}  \{recording.treble}  \{recording.gain}  \{recording.reverb}  \{recording.crush}";
+                                            text: "\{recording[0]}  \{recording[1]}  \{recording[2]}  \{recording[3]}  \{recording[4]}  \{recording[5]}";
                                         }
                                     }
                                 }
@@ -377,12 +397,18 @@ export component AppWindow inherits Window {
                                 clicked => {
                                     if !deleting_recording {
                                         current_recording = index;
-                                        dial_values[0] = recordings[current_recording].bass;
-                                        dial_values[1] = recordings[current_recording].vocals;
-                                        dial_values[2] = recordings[current_recording].treble;
-                                        dial_values[3] = recordings[current_recording].gain;
-                                        dial_values[4] = recordings[current_recording].reverb;
-                                        dial_values[5] = recordings[current_recording].crush;
+                                        dial_values[0] = recording_values[current_recording][0];
+                                        dial_values[1] = recording_values[current_recording][1];
+                                        dial_values[2] = recording_values[current_recording][2];
+                                        dial_values[3] = recording_values[current_recording][3];
+                                        dial_values[4] = recording_values[current_recording][4];
+                                        dial_values[5] = recording_values[current_recording][5];
+                                    } else {
+                                        deleted_recording = index;
+                                        delete_recording = true;
+                                        update_and_save();
+                                        delete_recording = false;
+                                        current_recording = 0;
                                     }
                                 }
                             }
