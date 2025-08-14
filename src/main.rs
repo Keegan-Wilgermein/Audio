@@ -199,7 +199,7 @@ impl Settings {
     }
 }
 
-// Keeps track of the settings and the recording state
+// Keeps track of the settings and the recording thread
 struct Tracker {
     settings: Arc<RwLock<Settings>>,
     recorder: Arc<Mutex<Option<Thread>>>,
