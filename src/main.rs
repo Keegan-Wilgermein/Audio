@@ -270,8 +270,6 @@ fn main() -> Result<(), Box<dyn STDError>> {
         }
     }));
 
-    let tracker_ref_count = Arc::clone(&tracker);
-
     ui.on_startup({
         let ui_handle = ui.as_weak();
 
@@ -322,6 +320,8 @@ fn main() -> Result<(), Box<dyn STDError>> {
 
     ui.on_record({
         let ui_handle = ui.as_weak();
+
+        let tracker_ref_count = Arc::clone(&tracker);
 
         move || {
             let ui = ui_handle.unwrap();
