@@ -2,10 +2,11 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 // -------- Imports --------
-use std::{error::Error as STDError, sync::{Arc, RwLock}};
+use std::{error::Error as STDError, sync::{Arc, Mutex, RwLock}, thread::{self, Thread}};
 use savefile::{load_file, save_file};
 use savefile_derive::Savefile;
 use slint::{Model, ModelRc, SharedString, ToSharedString};
+use qruhear::{RUHear, RUBuffers, rucallback};
 
 slint::include_modules!();
 
@@ -130,13 +131,13 @@ impl Recording {
         ModelRc::new(slint::VecModel::from(all_recording_values))
     }
 
-    fn edited(data1: &Recording, data2: [i32; 6]) -> bool {
-        if data1.bass == data2[0]
-        && data1.vocals == data2[1]
-        && data1.treble == data2[2]
-        && data1.gain == data2[3]
-        && data1.reverb == data2[4]
-        && data1.crush == data2[5] {
+    fn edited(record: &Recording, list: [i32; 6]) -> bool {
+        if record.bass == list[0]
+        && record.vocals == list[1]
+        && record.treble == list[2]
+        && record.gain == list[3]
+        && record.reverb == list[4]
+        && record.crush == list[5] {
             false
         } else {
             true
@@ -198,6 +199,49 @@ impl Settings {
     }
 }
 
+struct Tracker {
+    settings: Arc<RwLock<Settings>>,
+    recorder: Arc<Mutex<Option<Thread>>>,
+}
+
+impl Tracker {
+    fn new(settings: Settings) -> Tracker {
+        Tracker {
+            settings: Arc::new(RwLock::new(settings)),
+            recorder: Arc::new(Mutex::new(None)),
+        }
+    }
+
+    fn record(self: &Arc<Self>) {
+        let current_thread = Arc::clone(self);
+
+        let _ = thread::Builder::new().name(String::from("Recorder")).spawn(move || {
+            *current_thread.recorder.lock().unwrap() = Some(thread::current());
+
+            let record_edit = |data: RUBuffers| {
+                // println!("{:?}", data);
+            };
+
+            let callback = rucallback!(record_edit);
+
+            let mut ruhear = RUHear::new(callback);
+
+            let _ = ruhear.start();
+            thread::park();
+
+            *current_thread.recorder.lock().unwrap() = None;
+        });
+    }
+
+    fn stop(self: &Arc<Self>) {
+        let _ = Arc::clone(self);
+
+        if let Some(recorder) = self.recorder.lock().unwrap().as_ref() {
+            recorder.unpark();
+        }
+    }
+}
+
 // -------- Functions --------
 fn save(data: &Settings) -> Result<Success, Error> {
     match save_file("settings.bin", 0, data) {
@@ -217,24 +261,26 @@ fn main() -> Result<(), Box<dyn STDError>> {
     let ui = AppWindow::new()?;
 
     // Creates a variable that can be used across threads and move blocks and can be read from without locking
-    let data = Arc::new(RwLock::new(match load() {
+    let tracker = Arc::new(Tracker::new(match load() {
         Ok(value) => value,
         Err(_) => {
             let _ = save(&Settings::new());
             Settings::new()
-        },
+        }
     }));
+
+    let tracker_ref_count = Arc::clone(&tracker);
 
     ui.on_startup({
         let ui_handle = ui.as_weak();
 
-        let shared = data.clone();
+        let startup_ref_count = tracker.settings.clone();
 
         move || {
             let ui = ui_handle.unwrap();
 
             // Acquires read access to the loaded data
-            let settings = shared.read().unwrap();
+            let settings = startup_ref_count.read().unwrap();
 
             let index_data = settings.get_index_data();
 
@@ -252,7 +298,7 @@ fn main() -> Result<(), Box<dyn STDError>> {
     ui.on_update_and_save({
         let ui_handle = ui.as_weak();
 
-        let shared = data.clone();
+        let update_ref_count = tracker.settings.clone();
 
         move || {
             let ui = ui_handle.unwrap();
@@ -261,15 +307,29 @@ fn main() -> Result<(), Box<dyn STDError>> {
             // This frees it to be used elsewhere slightly quicker
             {
                 // Acquires write access to the loaded data
-                let mut settings = shared.write().unwrap();
+                let mut settings = update_ref_count.write().unwrap();
                 settings.sync(&ui);
             }
 
             ui.invoke_startup();
 
-            let settings = shared.read().unwrap();
+            // Aquires read access to the loaded data
+            let settings = update_ref_count.read().unwrap();
             let _ = save(&settings);
+        }
+    });
 
+    ui.on_record({
+        let ui_handle = ui.as_weak();
+
+        move || {
+            let ui = ui_handle.unwrap();
+
+            if ui.get_recording() {
+                tracker_ref_count.record();
+            } else {
+                tracker_ref_count.stop();
+            }
         }
     });
 

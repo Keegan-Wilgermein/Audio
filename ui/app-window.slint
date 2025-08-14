@@ -9,20 +9,20 @@ export component AppWindow inherits Window {
 
     in-out property <[string]> preset_names: [];
     in-out property <[[int]]> preset_values: [];
-    in-out property <bool> new_preset: false;
-    in-out property <bool> delete_preset: false;
+    out property <bool> new_preset: false;
+    out property <bool> delete_preset: false;
     out property <int> deleted_preset: 0;
 
     in-out property <[string]> recording_names: [];
     in-out property <[[int]]> recording_values: [];
     out property <int> current_recording: 0;
     out property <int> deleted_recording: 0;
-    in-out property <bool> delete_recording: false;
+    out property <bool> delete_recording: false;
 
     out property <[int]> dial_values: [0, 0, 0, 0, 0, 0];
 
     private property <bool> playing: false;
-    private property <bool> recording: false;
+    out property <bool> recording: false;
 
     private property <length> snap_by: 10px;
     private property <length> next_snap: snap_by;
@@ -35,6 +35,7 @@ export component AppWindow inherits Window {
     // -------- Callbacks --------
     callback startup();
     callback update_and_save();
+    callback record();
 
     // -------- Timers --------
     // Loads settings to UI on startup
@@ -94,9 +95,10 @@ export component AppWindow inherits Window {
                             alignment: center;
 
                             TouchArea {
-                                mouse-cursor: ew-resize;
+                                mouse-cursor: recording ? default : ew-resize;
 
                                 SwipeGestureHandler {
+                                    enabled: !recording;
 
                                     Rectangle {
                                         border-width: 2px;
@@ -570,6 +572,7 @@ export component AppWindow inherits Window {
                         if recording {
                             playing = false;
                         }
+                        record();
                     }
                 }
             }
