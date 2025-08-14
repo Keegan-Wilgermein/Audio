@@ -225,9 +225,9 @@ impl Tracker {
 
             let callback = rucallback!(record_edit);
 
-            let mut ruhear = RUHear::new(callback);
+            let mut recorder = RUHear::new(callback);
 
-            let _ = ruhear.start();
+            let _ = recorder.start();
             thread::park();
 
             *current_thread.recorder.lock().unwrap() = None;
