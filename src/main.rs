@@ -230,6 +230,8 @@ impl Tracker {
             let _ = recorder.start();
             thread::park();
 
+            let _ = recorder.stop();
+
             *current_thread.recorder.lock().unwrap() = None;
         });
     }
