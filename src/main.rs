@@ -185,6 +185,16 @@ impl Settings {
             self.presets.remove(new.get_deleted_preset() as usize);
         }
 
+        // Check for preset rename
+        if new.get_rename_preset() {
+            for preset in 0..index_data.preset_length {
+                self.presets[preset].name = String::from(match new.get_preset_names().row_data(preset) {
+                    Some(name) => name,
+                    None => slint::SharedString::from("New Preset"),
+                });
+            }
+        }
+
         // Check for recording edits
         if index_data.recording_length > 0 {
             if Recording::edited(&self.recordings[new.get_current_recording() as usize], dials) {

@@ -12,6 +12,7 @@ export component AppWindow inherits Window {
     out property <bool> new_preset: false;
     out property <bool> delete_preset: false;
     out property <int> deleted_preset: 0;
+    out property <bool> rename_preset: false;
 
     in-out property <[string]> recording_names: [];
     in-out property <[[int]]> recording_values: [];
@@ -30,6 +31,7 @@ export component AppWindow inherits Window {
     private property <length> dial_pressed: 0px;
 
     private property <bool> deleting_preset: false;
+    private property <bool> renaming_preset: false;
     private property <bool> deleting_recording: false;
 
     // -------- Callbacks --------
@@ -52,6 +54,17 @@ export component AppWindow inherits Window {
             dial_values[3] = recording_values[current_recording][3];
             dial_values[4] = recording_values[current_recording][4];
             dial_values[5] = recording_values[current_recording][5];
+        }
+    }
+
+    // Delays save until animation is finished
+    Timer {
+        interval: 0.5s;
+        running: rename_preset;
+
+        triggered => {
+            update_and_save();
+            rename_preset = false;
         }
     }
 
@@ -199,6 +212,38 @@ export component AppWindow inherits Window {
                             }
                         }
 
+                        if renaming_preset:
+                        TouchArea {
+                            mouse-cursor: pointer;
+
+                            Image {
+                                source: @image-url("icons/check.svg");
+                                width: 16px;
+                                height: 16px;
+                            }
+
+                            clicked => {
+                                renaming_preset = !renaming_preset;
+                                rename_preset = true;
+                            }
+                        }
+
+                        if !renaming_preset:
+                        TouchArea {
+                            mouse-cursor: pointer;
+
+                            Image {
+                                source: @image-url("icons/rename.svg");
+                                width: 16px;
+                                height: 16px;
+                            }
+
+                            clicked => {
+                                deleting_preset = false;
+                                renaming_preset = !renaming_preset;
+                            }
+                        }
+
                         if deleting_preset:
                         TouchArea {
                             mouse-cursor: pointer;
@@ -225,6 +270,7 @@ export component AppWindow inherits Window {
                             }
 
                             clicked => {
+                                renaming_preset = false;
                                 deleting_preset = !deleting_preset;
                             }
                         }
@@ -235,30 +281,47 @@ export component AppWindow inherits Window {
                         
                         VerticalLayout {
                             alignment: start;
-                            spacing: 16px;
+                            spacing: renaming_preset ? 8px : 16px;
+
+                            animate spacing {
+                                duration: 0.3s;
+                                easing: ease-in-out-back;
+                            }
 
                             for preset[index] in preset_values:
                             TouchArea {
                                 mouse-cursor: pointer;
+                                enabled: !renaming_preset;
 
                                 Rectangle {
                                     border-radius: 8px;
-                                    background: deleting_preset ? @linear-gradient(90deg, #dc4242 30%, #ed2e2e00 100%) : #ffffff00;
+                                    background: deleting_preset ? @linear-gradient(90deg, #dc4242 30%, #ed2e2e00 100%) : renaming_preset ? @linear-gradient(90deg, #3f51b5 30%, #3f51b500 100%) : #ffffff00;
 
                                     animate background {
                                         duration: 0.2s;
                                     }
 
                                     VerticalLayout {
-                                        padding: deleting_preset ? 8px: 0px;
-                                        spacing: 4px;
+                                        padding: deleting_preset || renaming_preset ? 8px: 0px;
+                                        spacing: renaming_preset ? 0px : 4px;
                                         alignment: start;
 
-                                        animate padding {
+                                        animate padding, spacing {
                                             duration: 0.3s;
                                             easing: ease-in-out-back;
                                         }
+
+                                        if renaming_preset:
+                                        TextInput {
+                                            text: preset_names[index];
+                                            font-weight: 700;
+
+                                            edited => {
+                                                preset_names[index] = self.text;
+                                            }
+                                        }
             
+                                        if !renaming_preset:
                                         Text {
                                             text: preset_names[index];
                                             font-weight: 700;
@@ -266,27 +329,34 @@ export component AppWindow inherits Window {
                                         }
                 
                                         Text {
-                                            text: "\{preset[0]} \{preset[1]} \{preset[2]} \{preset[3]} \{preset[4]} \{preset[5]}";
+                                            text: "\{preset[0]}  \{preset[1]}  \{preset[2]}  \{preset[3]}  \{preset[4]}  \{preset[5]}";
                                             overflow: elide;
+                                            vertical-alignment: center;
+                                            font-size: renaming_preset ? 1px : 12px;
+                                            opacity: renaming_preset ? 0% : 100%;
+
+                                            animate font-size, opacity {
+                                                duration: 0.3s;
+                                                easing: ease-in-out-back;
+                                            }
                                         }
                                     }
                                 }
 
                                 clicked => {
-                                    if !deleting_preset {
+                                    if deleting_preset {
+                                        deleted_preset = index;
+                                        delete_preset = true;
+                                        update_and_save();
+                                        delete_preset = false;
+                                    } else {
                                         dial_values[0] = preset[0];
                                         dial_values[1] = preset[1];
                                         dial_values[2] = preset[2];
                                         dial_values[3] = preset[3];
                                         dial_values[4] = preset[4];
                                         dial_values[5] = preset[5];
-
                                         update_and_save();
-                                    } else {
-                                        deleted_preset = index;
-                                        delete_preset = true;
-                                        update_and_save();
-                                        delete_preset = false;
                                     }
                                 }
                             }
