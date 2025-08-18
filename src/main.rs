@@ -251,7 +251,10 @@ impl Tracker {
 
             thread::park();
 
-            let _ = recorder.stop();
+            match recorder.stop() {
+                Ok(_) => Record::Success,
+                Err(_) => Record::Error,
+            };
 
             *current_thread.recorder.lock().unwrap() = None;
         }) {
@@ -355,10 +358,7 @@ fn main() -> Result<(), Box<dyn STDError>> {
             let ui = ui_handle.unwrap();
 
             if ui.get_recording() {
-                if tracker_ref_count.record() == Record::Error {
-                    ui.set_recording(false);
-                    println!("Fail");
-                }
+                tracker_ref_count.record();
             } else {
                 tracker_ref_count.stop();
             }
