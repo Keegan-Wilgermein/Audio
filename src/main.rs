@@ -22,6 +22,13 @@ enum Success {
     SaveSuccess,
 }
 
+// Record values
+#[derive(PartialEq)]
+enum Record {
+    Error,
+    Success,
+}
+
 // -------- Structs --------
 // Index data for Settings struct
 struct IndexData {
@@ -223,10 +230,10 @@ impl Tracker {
         }
     }
 
-    fn record(self: &Arc<Self>) {
+    fn record(self: &Arc<Self>) -> Record {
         let current_thread = Arc::clone(self);
 
-        let _ = thread::Builder::new().name(String::from("Recorder")).spawn(move || {
+        let state = match thread::Builder::new().name(String::from("Recorder")).spawn(move || {
             *current_thread.recorder.lock().unwrap() = Some(thread::current());
 
             let record_edit = |data: RUBuffers| {
@@ -237,13 +244,22 @@ impl Tracker {
 
             let mut recorder = RUHear::new(callback);
 
-            let _ = recorder.start();
+            match recorder.start() {
+                Ok(_) => Record::Success,
+                Err(_) => Record::Error,
+            };
+
             thread::park();
 
             let _ = recorder.stop();
 
             *current_thread.recorder.lock().unwrap() = None;
-        });
+        }) {
+            Ok(_) => Record::Success,
+            Err(_) => Record::Error,
+        };
+
+        state
     }
 
     fn stop(self: &Arc<Self>) {
@@ -339,7 +355,10 @@ fn main() -> Result<(), Box<dyn STDError>> {
             let ui = ui_handle.unwrap();
 
             if ui.get_recording() {
-                tracker_ref_count.record();
+                if tracker_ref_count.record() == Record::Error {
+                    ui.set_recording(false);
+                    println!("Fail");
+                }
             } else {
                 tracker_ref_count.stop();
             }

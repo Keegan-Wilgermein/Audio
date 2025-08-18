@@ -23,7 +23,7 @@ export component AppWindow inherits Window {
     out property <[int]> dial_values: [0, 0, 0, 0, 0, 0];
 
     private property <bool> playing: false;
-    out property <bool> recording: false;
+    in-out property <bool> recording: false;
 
     private property <length> snap_by: 10px;
     private property <length> next_snap: snap_by;
