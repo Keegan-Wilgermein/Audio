@@ -7,6 +7,7 @@ use savefile::{load_file, save_file};
 use savefile_derive::Savefile;
 use slint::{Model, ModelRc, SharedString, ToSharedString};
 use qruhear::{RUHear, RUBuffers, rucallback};
+use hound::{WavWriter, SampleFormat, WavSpec};
 
 slint::include_modules!();
 
@@ -17,6 +18,7 @@ enum Error {
     SaveError,
     LoadError,
     RecordError,
+    WriteError,
 }
 
 impl Error {
@@ -25,6 +27,7 @@ impl Error {
             Error::SaveError => String::from("Failed to save data ... Reverting to previous save"),
             Error::LoadError => String::from("Data doesn't exist ... Creating save file"),
             Error::RecordError => String::from("Recording failed ... Please try again"),
+            Error::WriteError => String::from("Failed to write audio .. Please try again"),
         }
     }
 }
@@ -241,9 +244,26 @@ impl Tracker {
 
         let state = match thread::Builder::new().name(String::from("Recorder")).spawn(move || {
             *current_thread.recorder.lock().unwrap() = Some(thread::current());
+
+            let audio_spec = WavSpec {
+                channels: 1,
+                sample_rate: 48000,
+                bits_per_sample: 32,
+                sample_format: SampleFormat::Float,
+            };
+
+            let mut writer = match WavWriter::create("Recording.wav", audio_spec) {
+                Ok(value) => value,
+                Err(_) => {
+                    return Err(Error::WriteError);
+                }
+            };
             
-            let record_edit = |data: RUBuffers| {
+            let record_edit = move |data: RUBuffers| {
                 // println!("{:?}", data);
+                for sample in &data[1] {
+                    writer.write_sample(*sample).unwrap();
+                }
             };
             
             let callback = rucallback!(record_edit);
