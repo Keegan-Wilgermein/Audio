@@ -34,6 +34,9 @@ export component AppWindow inherits Window {
     private property <bool> renaming_preset: false;
     private property <bool> deleting_recording: false;
 
+    in-out property <string> error_notification: "";
+    in-out property <bool> error-recieved: false;
+
     // -------- Callbacks --------
     callback startup();
     callback update_and_save();
@@ -65,6 +68,17 @@ export component AppWindow inherits Window {
         triggered => {
             update_and_save();
             rename_preset = false;
+        }
+    }
+
+    // Remove error text after period
+    Timer {
+        interval: 5s;
+        running: error-recieved;
+
+        triggered => {
+            error_notification = "";
+            error-recieved = false;
         }
     }
 
@@ -480,6 +494,17 @@ export component AppWindow inherits Window {
             VerticalLayout {
                 spacing: 12px;
                 height: 0%;
+
+                // Error notifications
+                HorizontalLayout {
+                    alignment: center;
+
+                    Text {
+                        text: error_notification;
+                        color: #dc4242;
+                        font-weight: 700;
+                    }
+                }
 
                 // Control group
                 HorizontalLayout {

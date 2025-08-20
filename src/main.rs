@@ -12,21 +12,27 @@ slint::include_modules!();
 
 // -------- Enums --------
 // Errors
+#[derive(Clone, Copy, PartialEq)]
 enum Error {
     SaveError,
     LoadError,
+    RecordError,
+}
+
+impl Error {
+    fn get_text(kind: Error) -> String {
+        match kind {
+            Error::SaveError => String::from("Failed to save data ... Reverting to previous save"),
+            Error::LoadError => String::from("Data doesn't exist ... Creating save file"),
+            Error::RecordError => String::from("Recording failed ... Please try again"),
+        }
+    }
 }
 
 // Successes
 enum Success {
     SaveSuccess,
-}
-
-// Record values
-#[derive(PartialEq)]
-enum Record {
-    Error,
-    Success,
+    RecordSuccess
 }
 
 // -------- Structs --------
@@ -230,47 +236,53 @@ impl Tracker {
         }
     }
 
-    fn record(self: &Arc<Self>) -> Record {
+    fn record(self: &Arc<Self>) -> Result<Success, Error> {
         let current_thread = Arc::clone(self);
 
         let state = match thread::Builder::new().name(String::from("Recorder")).spawn(move || {
             *current_thread.recorder.lock().unwrap() = Some(thread::current());
-
+            
             let record_edit = |data: RUBuffers| {
                 // println!("{:?}", data);
             };
-
+            
             let callback = rucallback!(record_edit);
-
+            
             let mut recorder = RUHear::new(callback);
 
             match recorder.start() {
-                Ok(_) => Record::Success,
-                Err(_) => Record::Error,
+                Ok(_) => Success::RecordSuccess,
+                Err(_) => {
+                    return Err(Error::RecordError);
+                },
             };
 
             thread::park();
 
             match recorder.stop() {
-                Ok(_) => Record::Success,
-                Err(_) => Record::Error,
+                Ok(_) => Success::RecordSuccess,
+                Err(_) => {
+                    return Err(Error::RecordError);
+                },
             };
 
-            *current_thread.recorder.lock().unwrap() = None;
+            return Ok(Success::RecordSuccess);
         }) {
-            Ok(_) => Record::Success,
-            Err(_) => Record::Error,
+            Ok(_) => Ok(Success::RecordSuccess),
+            Err(_) => Err(Error::RecordError),
         };
 
         state
     }
 
     fn stop(self: &Arc<Self>) {
-        let _ = Arc::clone(self);
+        let current_thread = Arc::clone(self);
 
         if let Some(recorder) = self.recorder.lock().unwrap().as_ref() {
             recorder.unpark();
         }
+
+        *current_thread.recorder.lock().unwrap() = None;
     }
 }
 
@@ -292,11 +304,14 @@ fn load() -> Result<Settings, Error> {
 fn main() -> Result<(), Box<dyn STDError>> {
     let ui = AppWindow::new()?;
 
+    let mut load_error = None;
+
     // Creates a variable that can be used across threads and move blocks and can be read from without locking
     let tracker = Arc::new(Tracker::new(match load() {
         Ok(value) => value,
-        Err(_) => {
+        Err(error) => {
             let _ = save(&Settings::new());
+            load_error = Some(error);
             Settings::new()
         }
     }));
@@ -308,6 +323,16 @@ fn main() -> Result<(), Box<dyn STDError>> {
 
         move || {
             let ui = ui_handle.unwrap();
+
+            match load_error {
+                Some(value) => {
+                    ui.set_error_notification(slint::SharedString::from(Error::get_text(value)));
+                    ui.set_error_recieved(true);
+                },
+                None => {
+
+                }
+            }
 
             // Acquires read access to the loaded data
             let settings = startup_ref_count.read().unwrap();
@@ -358,7 +383,16 @@ fn main() -> Result<(), Box<dyn STDError>> {
             let ui = ui_handle.unwrap();
 
             if ui.get_recording() {
-                tracker_ref_count.record();
+                match tracker_ref_count.record() {
+                    Ok(_) => (),
+                    Err(error) => {
+                        ui.set_error_notification(slint::SharedString::from(Error::get_text(error)));
+                        ui.set_error_recieved(true);
+                        tracker.recorder.clear_poison();
+                        ui.set_recording(false);
+                        tracker_ref_count.stop();
+                    }
+                }
             } else {
                 tracker_ref_count.stop();
             }
