@@ -237,6 +237,16 @@ impl Settings {
         if new.get_delete_recording() {
             self.recordings.remove(new.get_deleted_recording() as usize);
         }
+
+        // Check for recording rename
+        if new.get_rename_recording() {
+            for recording in 0..index_data.recording_length {
+                self.recordings[recording].name = String::from(match new.get_recording_names().row_data(recording) {
+                    Some(name) => name,
+                    None => slint::SharedString::from("New Recording"),
+                });
+            }
+        }
     }
 }
 

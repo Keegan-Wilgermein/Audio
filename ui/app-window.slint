@@ -17,8 +17,9 @@ export component AppWindow inherits Window {
     in-out property <[string]> recording_names: [];
     in-out property <[[int]]> recording_values: [];
     out property <int> current_recording: 0;
-    out property <int> deleted_recording: 0;
     out property <bool> delete_recording: false;
+    out property <int> deleted_recording: 0;
+    out property <bool> rename_recording: false;
 
     out property <[int]> dial_values: [0, 0, 0, 0, 0, 0];
 
@@ -33,9 +34,12 @@ export component AppWindow inherits Window {
     private property <bool> deleting_preset: false;
     private property <bool> renaming_preset: false;
     private property <bool> deleting_recording: false;
+    private property <bool> renaming_recording: false; 
 
     in-out property <string> error_notification: "";
     in-out property <bool> error-recieved: false;
+
+    private property <bool> control_buttons: true;
 
     // -------- Callbacks --------
     callback startup();
@@ -60,7 +64,7 @@ export component AppWindow inherits Window {
         }
     }
 
-    // Delays save until animation is finished
+    // Delays preset save until animation is finished
     Timer {
         interval: 0.5s;
         running: rename_preset;
@@ -68,6 +72,17 @@ export component AppWindow inherits Window {
         triggered => {
             update_and_save();
             rename_preset = false;
+        }
+    }
+
+    // Delays recording save until animation is finished
+    Timer {
+        interval: 0.5s;
+        running: rename_recording;
+
+        triggered => {
+            update_and_save();
+            rename_recording = false;
         }
     }
 
@@ -239,6 +254,7 @@ export component AppWindow inherits Window {
                             clicked => {
                                 renaming_preset = !renaming_preset;
                                 rename_preset = true;
+                                control_buttons = true;
                             }
                         }
 
@@ -255,6 +271,7 @@ export component AppWindow inherits Window {
                             clicked => {
                                 deleting_preset = false;
                                 renaming_preset = !renaming_preset;
+                                control_buttons = false;
                             }
                         }
 
@@ -270,6 +287,7 @@ export component AppWindow inherits Window {
 
                             clicked => {
                                 deleting_preset = !deleting_preset;
+                                control_buttons = true;
                             }
                         }
 
@@ -286,6 +304,7 @@ export component AppWindow inherits Window {
                             clicked => {
                                 renaming_preset = false;
                                 deleting_preset = !deleting_preset;
+                                control_buttons = false;
                             }
                         }
                     }
@@ -392,6 +411,40 @@ export component AppWindow inherits Window {
                             font-weight: 700;
                         }
 
+                        if renaming_recording:
+                        TouchArea {
+                            mouse-cursor: pointer;
+
+                            Image {
+                                source: @image-url("icons/check.svg");
+                                width: 16px;
+                                height: 16px;
+                            }
+
+                            clicked => {
+                                renaming_recording = !renaming_recording;
+                                rename_recording = true;
+                                control_buttons = true;
+                            }
+                        }
+
+                        if !renaming_recording:
+                        TouchArea {
+                            mouse-cursor: pointer;
+
+                            Image {
+                                source: @image-url("icons/rename.svg");
+                                width: 16px;
+                                height: 16px;
+                            }
+
+                            clicked => {
+                                deleting_recording = false;
+                                renaming_recording = !renaming_recording;
+                                control_buttons = false;
+                            }
+                        }
+
                         if deleting_recording:
                         TouchArea {
                             mouse-cursor: pointer;
@@ -404,6 +457,7 @@ export component AppWindow inherits Window {
 
                             clicked => {
                                 deleting_recording = !deleting_recording;
+                                control_buttons = true;
                             }
                         }
 
@@ -419,7 +473,9 @@ export component AppWindow inherits Window {
 
                             clicked => {
                                 deleting_recording = !deleting_recording;
+                                renaming_recording = false;
                                 playing = false;
+                                control_buttons = false;
                             }
                         }
                     }
@@ -430,31 +486,48 @@ export component AppWindow inherits Window {
 
                         VerticalLayout {
                             alignment: start;
-                            spacing: 16px;
+                            spacing: renaming_recording ? 8px : 16px;
+
+                            animate spacing {
+                                duration: 0.3s;
+                                easing: ease-in-out-back;
+                            }
 
                             for recording[index] in recording_values:
                             TouchArea {
                                 mouse-cursor: pointer;
+                                enabled: !renaming_recording;
 
                                 Rectangle {
                                     border-radius: 8px;
                                     border-width: 1px;
-                                    border-color: current_recording == index && !deleting_recording ? @linear-gradient(90deg, #ffffff 10%, #ffffff00 90%) : #ffffff00;
-                                    background: deleting_recording ? @linear-gradient(90deg, #dc4242 30%, #ed2e2e00 100%) : #ffffff00;
+                                    border-color: current_recording == index && !deleting_recording && !renaming_recording ? @linear-gradient(90deg, #ffffff 10%, #ffffff00 90%) : #ffffff00;
+                                    background: deleting_recording ? @linear-gradient(90deg, #dc4242 30%, #ed2e2e00 100%) : renaming_recording ? @linear-gradient(90deg, #3f51b5 30%, #3f51b500 100%) : #ffffff00;
                                     
                                     animate background, border-color {
                                         duration: 0.2s;
                                     }
                 
                                     VerticalLayout {
-                                        padding: deleting_recording || current_recording == index ? 8px: 0px;
-                                        spacing: 4px;
+                                        padding: deleting_recording || current_recording == index || renaming_recording ? 8px: 0px;
+                                        spacing: renaming_recording ? 0px : 4px;
 
-                                        animate padding {
+                                        animate padding, spacing {
                                             duration: 0.3s;
                                             easing: ease-in-out-back;
                                         }
             
+                                        if renaming_recording:
+                                        TextInput {
+                                            text: recording_names[index];
+                                            font-weight: 700;
+
+                                            edited => {
+                                                recording_names[index] = self.text;
+                                            }
+                                        }
+            
+                                        if !renaming_recording:
                                         Text {
                                             text: recording_names[index];
                                             font-weight: 700;
@@ -463,12 +536,27 @@ export component AppWindow inherits Window {
                 
                                         Text {
                                             text: "\{recording[0]}  \{recording[1]}  \{recording[2]}  \{recording[3]}  \{recording[4]}  \{recording[5]}";
+                                            overflow: elide;
+                                            vertical-alignment: center;
+                                            font-size: renaming_recording ? 1px : 12px;
+                                            opacity: renaming_recording ? 0% : 100%;
+
+                                            animate font-size, opacity {
+                                                duration: 0.3s;
+                                                easing: ease-in-out-back;
+                                            }
                                         }
                                     }
                                 }
 
                                 clicked => {
-                                    if !deleting_recording {
+                                    if deleting_recording {
+                                        deleted_recording = index;
+                                        delete_recording = true;
+                                        update_and_save();
+                                        delete_recording = false;
+                                        current_recording = 0;
+                                    } else {
                                         current_recording = index;
                                         dial_values[0] = recording_values[current_recording][0];
                                         dial_values[1] = recording_values[current_recording][1];
@@ -476,12 +564,6 @@ export component AppWindow inherits Window {
                                         dial_values[3] = recording_values[current_recording][3];
                                         dial_values[4] = recording_values[current_recording][4];
                                         dial_values[5] = recording_values[current_recording][5];
-                                    } else {
-                                        deleted_recording = index;
-                                        delete_recording = true;
-                                        update_and_save();
-                                        delete_recording = false;
-                                        current_recording = 0;
                                     }
                                 }
                             }
@@ -512,7 +594,7 @@ export component AppWindow inherits Window {
 
                     back := TouchArea {
                         mouse-cursor: pointer;
-                        enabled: !recording && !deleting_recording;
+                        enabled: control_buttons;
 
                         Rectangle {
                             border-width: 1px;
@@ -545,7 +627,7 @@ export component AppWindow inherits Window {
 
                     play := TouchArea {
                         mouse-cursor: pointer;
-                        enabled: !recording && !deleting_recording;
+                        enabled: control_buttons;
 
                         Rectangle {
                             border-width: 1px;
@@ -595,7 +677,7 @@ export component AppWindow inherits Window {
 
                     next := TouchArea {
                         mouse-cursor: pointer;
-                        enabled: !recording && !deleting_recording;
+                        enabled: control_buttons;
 
                         Rectangle {
                             border-width: 1px;
@@ -666,6 +748,9 @@ export component AppWindow inherits Window {
                         recording = !recording;
                         if recording {
                             playing = false;
+                            control_buttons = false;
+                        } else {
+                            control_buttons = true;
                         }
                         record();
                     }
