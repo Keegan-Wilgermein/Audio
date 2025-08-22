@@ -22,8 +22,8 @@ enum Error {
 impl Error {
     fn get_text(kind: Error) -> String {
         match kind {
-            Error::SaveError => String::from("Failed to save data ... Reverting to previous save"),
-            Error::LoadError => String::from("Data doesn't exist ... Creating save file"),
+            Error::SaveError => String::from("Failed to save data ... Make a change to try again"),
+            Error::LoadError => String::from("Data doesn't exist ... Creating new file"),
             Error::RecordError => String::from("Recording failed ... Please try again"),
         }
     }
