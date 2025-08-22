@@ -7,7 +7,6 @@ use savefile::{load_file, save_file};
 use savefile_derive::Savefile;
 use slint::{Model, ModelRc, SharedString, ToSharedString};
 use qruhear::{RUHear, RUBuffers, rucallback};
-use hound::{WavWriter, SampleFormat, WavSpec};
 
 slint::include_modules!();
 
@@ -18,7 +17,6 @@ enum Error {
     SaveError,
     LoadError,
     RecordError,
-    WriteError,
 }
 
 impl Error {
@@ -27,7 +25,6 @@ impl Error {
             Error::SaveError => String::from("Failed to save data ... Reverting to previous save"),
             Error::LoadError => String::from("Data doesn't exist ... Creating save file"),
             Error::RecordError => String::from("Recording failed ... Please try again"),
-            Error::WriteError => String::from("Failed to write audio .. Please try again"),
         }
     }
 }
@@ -99,35 +96,40 @@ impl Preset {
 // Recording data
 #[derive(Savefile)]
 struct Recording {
+    name: String,
     bass: i32,
     vocals: i32,
     treble: i32,
     gain: i32,
     reverb: i32,
     crush: i32,
+    data: Vec<Vec<f32>>,
 }
 
 impl Recording {
-    fn new() -> Recording {
-        Recording {
-            bass: 0,
-            vocals: 0,
-            treble: 0,
-            gain: 0,
-            reverb: 0,
-            crush: 0,
-        }
+    fn new_values() -> [i32; 6] {
+        [0, 0, 0, 0, 0, 0]
     }
 
-    fn from(values: [i32; 6]) -> Recording {
+    fn from(values: [i32; 6], data: Vec<Vec<f32>>) -> Recording {
         Recording {
+            name: String::from("New recording"),
             bass: values[0],
             vocals: values[1],
             treble: values[2],
             gain: values[3],
             reverb: values[4],
             crush: values[5],
+            data: data,
         }
+    }
+
+    fn get_names(list: &Vec<Recording>, length: &usize) -> ModelRc<SharedString> {
+        let mut recording_names: Vec<SharedString> = vec![];
+        for recording in 0..*length {
+            recording_names.push(list[recording].name.to_shared_string());
+        }
+        ModelRc::new(slint::VecModel::from(recording_names))
     }
 
     fn get_values(list: &Vec<Recording>, length: &usize) -> ModelRc<ModelRc<i32>> {
@@ -145,6 +147,19 @@ impl Recording {
             all_recording_values.push(ModelRc::new(slint::VecModel::from(recording_values)));
         }
         ModelRc::new(slint::VecModel::from(all_recording_values))
+    }
+
+    fn update_values(&mut self, values: [i32; 6]) -> Recording {
+        Recording {
+            name: self.name.clone(),
+            bass: values[0],
+            vocals: values[1],
+            treble: values[2],
+            gain: values[3],
+            reverb: values[4],
+            crush: values[5],
+            data: self.data.clone(),
+        }
     }
 
     fn edited(record: &Recording, list: [i32; 6]) -> bool {
@@ -172,7 +187,7 @@ impl Settings {
     fn new() -> Settings {
         Settings {
             presets: vec![],
-            recordings: vec![Recording::new(), Recording::new()],
+            recordings: vec![],
         }
     }
 
@@ -214,7 +229,7 @@ impl Settings {
         // Check for recording edits
         if index_data.recording_length > 0 {
             if Recording::edited(&self.recordings[new.get_current_recording() as usize], dials) {
-                self.recordings[new.get_current_recording() as usize] = Recording::from(dials);
+                self.recordings[new.get_current_recording() as usize] = self.recordings[new.get_current_recording() as usize].update_values(dials);
             }
         }
 
@@ -245,25 +260,13 @@ impl Tracker {
         let state = match thread::Builder::new().name(String::from("Recorder")).spawn(move || {
             *current_thread.recorder.lock().unwrap() = Some(thread::current());
 
-            let audio_spec = WavSpec {
-                channels: 1,
-                sample_rate: 48000,
-                bits_per_sample: 32,
-                sample_format: SampleFormat::Float,
-            };
+            let mut settings = current_thread.settings.write().unwrap();
 
-            let mut writer = match WavWriter::create("Recording.wav", audio_spec) {
-                Ok(value) => value,
-                Err(_) => {
-                    return Err(Error::WriteError);
-                }
-            };
+            let audio_buffer = Arc::new(Mutex::new(Vec::new()));
+            let audio_buffer_clone = Arc::clone(&audio_buffer);
             
             let record_edit = move |data: RUBuffers| {
-                // println!("{:?}", data);
-                for sample in &data[1] {
-                    writer.write_sample(*sample).unwrap();
-                }
+                audio_buffer_clone.lock().unwrap().push(Tracker::serialise(data, 1));
             };
             
             let callback = rucallback!(record_edit);
@@ -279,6 +282,8 @@ impl Tracker {
 
             thread::park();
 
+            settings.recordings.push(Recording::from(Recording::new_values(), audio_buffer.lock().unwrap().clone()));
+
             match recorder.stop() {
                 Ok(_) => Success::RecordSuccess,
                 Err(_) => {
@@ -293,6 +298,10 @@ impl Tracker {
         };
 
         state
+    }
+
+    fn serialise(data: Vec<Vec<f32>>, channel: usize) -> Vec<f32> {
+        data[channel].clone()
     }
 
     fn stop(self: &Arc<Self>) {
@@ -348,6 +357,7 @@ fn main() -> Result<(), Box<dyn STDError>> {
                 Some(value) => {
                     ui.set_error_notification(slint::SharedString::from(Error::get_text(value)));
                     ui.set_error_recieved(true);
+                    load_error = None;
                 },
                 None => {
 
@@ -364,6 +374,9 @@ fn main() -> Result<(), Box<dyn STDError>> {
 
             // Sends a nested list of preset values to the UI to be displayed
             ui.set_preset_values(Preset::get_values(&settings.presets, &index_data.preset_length));
+
+            // Sends a list of recording names to the UI to be displayed
+            ui.set_recording_names(Recording::get_names(&settings.recordings, &index_data.recording_length));
 
             // Sends a nested list of recording edits to the UI to be displayed
             ui.set_recording_values(Recording::get_values(&settings.recordings, &index_data.recording_length));
@@ -416,6 +429,8 @@ fn main() -> Result<(), Box<dyn STDError>> {
             } else {
                 tracker_ref_count.stop();
             }
+
+            ui.invoke_update_and_save();
         }
     });
 
