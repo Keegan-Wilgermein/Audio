@@ -2,10 +2,10 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 // -------- Imports --------
-use std::{error::Error as STDError, sync::{Arc, Mutex, RwLock}, thread::{self, Thread}};
+use std::{error::Error as STDError, ffi::OsString, fs, sync::{Arc, Mutex, RwLock}, thread::{self, Thread}};
 use savefile::{load_file, save_file};
 use savefile_derive::Savefile;
-use slint::{Model, ModelRc, SharedString, ToSharedString};
+use slint::{Model, ModelRc, SharedString, ToSharedString, VecModel};
 use qruhear::{RUHear, RUBuffers, rucallback};
 use hound::{WavWriter, SampleFormat, WavSpec};
 
@@ -19,15 +19,17 @@ enum Error {
     LoadError,
     RecordError,
     WriteError,
+    ReadError,
 }
 
 impl Error {
     fn get_text(kind: Error) -> String {
         match kind {
             Error::SaveError => String::from("Failed to save data ... Reverting to previous save"),
-            Error::LoadError => String::from("Data doesn't exist ... Creating save file"),
+            Error::LoadError => String::from("Data doesn't exist ... Creating new file"),
             Error::RecordError => String::from("Recording failed ... Please try again"),
-            Error::WriteError => String::from("Failed to write audio .. Please try again"),
+            Error::WriteError => String::from("Failed to write audio"),
+            Error::ReadError => String::from("Failed to read files"),
         }
     }
 }
@@ -36,6 +38,69 @@ impl Error {
 enum Success {
     SaveSuccess,
     RecordSuccess
+}
+
+// File stuff
+enum File {
+    Names(Vec<String>),
+}
+
+impl File {
+    fn search(path: &str, extension: &str) -> Result<File, Error> {
+        let mut names = vec![];
+        match fs::read_dir(path) {
+            Ok(directories) => {
+                for entry in directories {
+                    match entry {
+                        Ok(directory) => {
+                            let path = directory.path();
+
+                            if path.is_file() {
+                                if let Some(file_type) = path.extension() {
+                                    if file_type == extension {
+                                        let file_name = match path.file_name() {
+                                            Some(value) => value.to_owned(),
+                                            None => OsString::from("Couldn't read name"),
+                                        };
+                                        names.push(match file_name.into_string() {
+                                            Ok(value) => {
+                                                File::truncate(value)
+                                            },
+                                            Err(_) => String::from("Couldn't read name"),
+                                        });
+                                    }
+                                }
+                            }
+                        },
+                        Err(_) => {
+                            return Err(Error::ReadError);
+                        },
+                    }
+                }
+                names.sort();
+                Ok(File::Names(names))
+            },
+            Err(_) => Err(Error::ReadError),
+        }
+    }
+
+    fn truncate(mut name: String) -> String {
+        let mut length = name.len() - 1;
+        loop {
+            if name.ends_with(".") {
+                name.remove(length);
+                break;
+            } else {
+                if length == 1 {
+                    name = String::from("Invalid file extension");
+                }
+                name.remove(length);
+                length -= 1;
+            }
+        }
+
+        String::from(name)
+    }
 }
 
 // -------- Structs --------
@@ -75,7 +140,7 @@ impl Preset {
         for preset in 0..*length {
             preset_names.push(list[preset].name.to_shared_string());
         }
-        ModelRc::new(slint::VecModel::from(preset_names))
+        ModelRc::new(VecModel::from(preset_names))
     }
 
     fn get_values(list: &Vec<Preset>, length: &usize) -> ModelRc<ModelRc<i32>> {
@@ -90,9 +155,9 @@ impl Preset {
             preset_values.push(list[values].reverb);
             preset_values.push(list[values].crush);
 
-            all_preset_values.push(ModelRc::new(slint::VecModel::from(preset_values)));
+            all_preset_values.push(ModelRc::new(VecModel::from(preset_values)));
         }
-        ModelRc::new(slint::VecModel::from(all_preset_values))
+        ModelRc::new(VecModel::from(all_preset_values))
     }
 }
 
@@ -130,6 +195,29 @@ impl Recording {
         }
     }
 
+    fn parse(recording: &Recording) -> [i32; 6] {
+        let mut list = [0, 0, 0, 0, 0, 0];
+
+        list[0] = recording.bass;
+        list[1] = recording.vocals;
+        list[2] = recording.treble;
+        list[3] = recording.gain;
+        list[4] = recording.reverb;
+        list[5] = recording.crush;
+
+        list
+    }
+
+    fn get_names(list: &Vec<String>) -> ModelRc<SharedString> {
+        let mut new_list = vec![];
+
+        for recording in 0..list.len() {
+            new_list.push(list[recording].to_shared_string());
+        }
+
+        ModelRc::new(VecModel::from(new_list))
+    }
+
     fn get_values(list: &Vec<Recording>, length: &usize) -> ModelRc<ModelRc<i32>> {
         let mut all_recording_values: Vec<ModelRc<i32>> = vec![];
         for values in 0..*length {
@@ -142,9 +230,22 @@ impl Recording {
             recording_values.push(list[values].reverb);
             recording_values.push(list[values].crush);
 
-            all_recording_values.push(ModelRc::new(slint::VecModel::from(recording_values)));
+            all_recording_values.push(ModelRc::new(VecModel::from(recording_values)));
         }
-        ModelRc::new(slint::VecModel::from(all_recording_values))
+        ModelRc::new(VecModel::from(all_recording_values))
+    }
+
+    fn update_values(saved_list: &Vec<Recording>, names_list: &Vec<String>, length: &usize) -> Vec<Recording> {
+        let mut recording_values= vec![];
+        for values in 0..names_list.len() {
+            if values < *length {
+                recording_values.push(Recording::from(Recording::parse(&saved_list[values])));
+            } else {
+                recording_values.push(Recording::new());
+            }
+        }
+
+        recording_values
     }
 
     fn edited(record: &Recording, list: [i32; 6]) -> bool {
@@ -172,7 +273,7 @@ impl Settings {
     fn new() -> Settings {
         Settings {
             presets: vec![],
-            recordings: vec![Recording::new(), Recording::new()],
+            recordings: vec![],
         }
     }
 
@@ -184,7 +285,7 @@ impl Settings {
     }
 
     fn sync(&mut self, new: &AppWindow) {
-        let index_data = self.get_index_data();
+        let mut index_data = self.get_index_data();
 
         let mut dials = [0, 0, 0, 0, 0, 0];
         for index in 0..6 {
@@ -206,9 +307,25 @@ impl Settings {
             for preset in 0..index_data.preset_length {
                 self.presets[preset].name = String::from(match new.get_preset_names().row_data(preset) {
                     Some(name) => name,
-                    None => slint::SharedString::from("New Preset"),
+                    None => SharedString::from("New Preset"),
                 });
             }
+        }
+
+        // Check for recording names
+        if new.get_new_recording() {
+            let recording_names = match File::search("./", "wav") {
+                Ok(File::Names(value)) => value,
+                Err(_) => vec![String::from("Couldn't read files")],
+            };
+    
+            self.recordings = Recording::update_values(&self.recordings, &recording_names, &index_data.recording_length);
+    
+            // Sends a list of recording names to the UI to be displayed
+            new.set_recording_names(Recording::get_names(&recording_names));
+
+            new.set_new_recording(false);
+            index_data = self.get_index_data();
         }
 
         // Check for recording edits
@@ -252,7 +369,12 @@ impl Tracker {
                 sample_format: SampleFormat::Float,
             };
 
-            let mut writer = match WavWriter::create("Recording.wav", audio_spec) {
+            let recording_amount = match File::search("./", "wav") {
+                Ok(File::Names(value)) => value.len(),
+                Err(_) => 0,
+            };
+
+            let mut writer = match WavWriter::create(format!("Recording {}.wav", recording_amount + 1), audio_spec) {
                 Ok(value) => value,
                 Err(_) => {
                     return Err(Error::WriteError);
@@ -348,16 +470,17 @@ fn main() -> Result<(), Box<dyn STDError>> {
                 Some(value) => {
                     ui.set_error_notification(slint::SharedString::from(Error::get_text(value)));
                     ui.set_error_recieved(true);
+                    load_error = None;
                 },
                 None => {
 
                 }
             }
 
-            // Acquires read access to the loaded data
-            let settings = startup_ref_count.read().unwrap();
+            // Acquires write access to the loaded data
+            let mut settings = startup_ref_count.write().unwrap();
 
-            let index_data = settings.get_index_data();
+            let mut index_data = settings.get_index_data();
 
             // Sends a list of preset names to the UI to be displayed
             ui.set_preset_names(Preset::get_names(&settings.presets, &index_data.preset_length));
@@ -365,8 +488,26 @@ fn main() -> Result<(), Box<dyn STDError>> {
             // Sends a nested list of preset values to the UI to be displayed
             ui.set_preset_values(Preset::get_values(&settings.presets, &index_data.preset_length));
 
+            if ui.get_started() {
+                settings.sync(&ui);
+
+                // Check for recording names
+                let recording_names = match File::search("./", "wav") {
+                    Ok(File::Names(value)) => value,
+                    Err(_) => vec![String::from("Couldn't read files")],
+                };
+
+                // Sends a list of recording names to the UI to be displayed
+                ui.set_recording_names(Recording::get_names(&recording_names));
+
+                ui.set_started(false);
+                index_data = settings.get_index_data();
+            }
+
             // Sends a nested list of recording edits to the UI to be displayed
-            ui.set_recording_values(Recording::get_values(&settings.recordings, &index_data.recording_length));
+            if index_data.recording_length > 0 {
+                ui.set_recording_values(Recording::get_values(&settings.recordings, &index_data.recording_length));
+            }
         }
     });
 
@@ -415,6 +556,7 @@ fn main() -> Result<(), Box<dyn STDError>> {
                 }
             } else {
                 tracker_ref_count.stop();
+                ui.invoke_update_and_save();
             }
         }
     });

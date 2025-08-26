@@ -7,6 +7,8 @@ export component AppWindow inherits Window {
     // -------- Variables --------
     private property <[[string]]> dials: [["Bass", "Vocals", "Treble"], ["Gain", "Reverb", "Crush"]];
 
+    in-out property <bool> started: true;
+
     in-out property <[string]> preset_names: [];
     in-out property <[[int]]> preset_values: [];
     out property <bool> new_preset: false;
@@ -19,6 +21,7 @@ export component AppWindow inherits Window {
     out property <int> current_recording: 0;
     out property <bool> delete_recording: false;
     out property <int> deleted_recording: 0;
+    in-out property <bool> new_recording: true;
 
     out property <[int]> dial_values: [0, 0, 0, 0, 0, 0];
 
@@ -677,6 +680,7 @@ export component AppWindow inherits Window {
                             control_buttons = false;
                         } else {
                             control_buttons = true;
+                            new_recording = true;
                         }
                         record();
                     }
