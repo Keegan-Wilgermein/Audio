@@ -20,6 +20,7 @@ export component AppWindow inherits Window {
     in-out property <[[int]]> recording_values: [];
     out property <int> current_recording: 0;
     out property <bool> delete_recording: false;
+    in-out property <string> deleted_recording_value: "";
     out property <int> deleted_recording: 0;
     in-out property <bool> new_recording: true;
 
@@ -47,6 +48,7 @@ export component AppWindow inherits Window {
     callback startup();
     callback update_and_save();
     callback rename_recording();
+    callback delete_recordings();
     callback record();
 
     // -------- Timers --------
@@ -545,8 +547,10 @@ export component AppWindow inherits Window {
                                 clicked => {
                                     if deleting_recording {
                                         deleted_recording = index;
+                                        deleted_recording_value = recording_names[index];
                                         delete_recording = true;
                                         update_and_save();
+                                        delete_recordings();
                                         delete_recording = false;
                                         current_recording = 0;
                                     } else {

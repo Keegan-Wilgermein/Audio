@@ -2,7 +2,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 // -------- Imports --------
-use std::{error::Error as STDError, ffi::OsString, fs::{self, rename}, sync::{Arc, Mutex, RwLock}, thread::{self, Thread}};
+use std::{error::Error as STDError, ffi::OsString, fs::{self, remove_file, rename}, sync::{Arc, Mutex, RwLock}, thread::{self, Thread}};
 use savefile::{load_file, save_file};
 use savefile_derive::Savefile;
 use slint::{Model, ModelRc, SharedString, ToSharedString, VecModel};
@@ -129,8 +129,11 @@ impl File {
         Ok(Success::RenameSuccess)
     }
 
-    fn delete(names: Vec<String>) {
-
+    fn delete(name: String) -> Result<Success, Error> {
+        match remove_file(format!("./{}.wav", name)) {
+            Ok(_) => Ok(Success::DeleteSuccess),
+            Err(_) => Err(Error::DeleteError),
+        }
     }
 }
 
@@ -292,7 +295,7 @@ impl Recording {
         }
     }
 
-    fn get_renamed_names(list: ModelRc<SharedString>, length: &usize) -> Vec<String> {
+    fn get_names_as_vector(list: ModelRc<SharedString>, length: &usize) -> Vec<String> {
         let mut new = vec![];
         for name in 0..*length {
             new.push(String::from(list.row_data(name).unwrap()));
@@ -614,9 +617,26 @@ fn main() -> Result<(), Box<dyn STDError>> {
 
             let index_data = settings.get_index_data();
 
-            let names = Recording::get_renamed_names(ui.get_recording_names(), &index_data.recording_length);
+            let names = Recording::get_names_as_vector(ui.get_recording_names(), &index_data.recording_length);
 
             match File::rename(names) {
+                Ok(_) => {
+                },
+                Err(error) => {
+                    ui.set_error_notification(Error::get_text(error));
+                    ui.set_error_recieved(true);
+                }
+            };
+        }
+    });
+
+    ui.on_delete_recordings({
+        let ui_handle = ui.as_weak();
+
+        move || {
+            let ui = ui_handle.unwrap();
+
+            match File::delete(String::from(ui.get_deleted_recording_value())) {
                 Ok(_) => {
                 },
                 Err(error) => {
@@ -638,3 +658,6 @@ fn main() -> Result<(), Box<dyn STDError>> {
 
     Ok(())
 }
+
+
+// Make a variable in the UI that changes based on the value of the deleted recording and match that to the file names
