@@ -6,6 +6,7 @@ export component AppWindow inherits Window {
 
     // -------- Variables --------
     private property <[[string]]> dials: [["Bass", "Vocals", "Treble"], ["Gain", "Reverb", "Crush"]];
+    out property <bool> dials_edited: false;
 
     in-out property <bool> started: true;
 
@@ -22,7 +23,8 @@ export component AppWindow inherits Window {
     out property <bool> delete_recording: false;
     in-out property <string> deleted_recording_value: "";
     out property <int> deleted_recording: 0;
-    in-out property <bool> new_recording: true;
+    in-out property <bool> new_recording: false;
+    out property <bool> renamed_recording: false;
 
     out property <[int]> dial_values: [0, 0, 0, 0, 0, 0];
 
@@ -45,8 +47,8 @@ export component AppWindow inherits Window {
     private property <bool> control_buttons: true;
 
     // -------- Callbacks --------
-    callback startup();
-    callback update_and_save();
+    callback update();
+    callback save();
     callback rename_recording();
     callback delete_recordings();
     callback record();
@@ -59,7 +61,8 @@ export component AppWindow inherits Window {
 
         triggered => {
             self.running = false;
-            startup();
+            update();
+            started = false;
             dial_values[0] = recording_values[current_recording][0];
             dial_values[1] = recording_values[current_recording][1];
             dial_values[2] = recording_values[current_recording][2];
@@ -75,8 +78,19 @@ export component AppWindow inherits Window {
         running: rename_preset;
 
         triggered => {
-            update_and_save();
+            save();
             rename_preset = false;
+        }
+    }
+
+    // Delays recording save until animation is finished
+    Timer {
+        interval: 0.5s;
+        running: renamed_recording;
+
+        triggered => {
+            rename_recording();
+            renamed_recording = false;
         }
     }
 
@@ -180,8 +194,9 @@ export component AppWindow inherits Window {
                                                 last_snap -= snap_by;
                                             }
                                         }
-
-                                        update_and_save();
+                                        dials_edited = true;
+                                        save();
+                                        dials_edited = false;
                                     }
                                 }
                             }
@@ -230,7 +245,7 @@ export component AppWindow inherits Window {
 
                             clicked => {
                                 new_preset = true;
-                                update_and_save();
+                                save();
                                 new_preset = false;
                             }
                         }
@@ -374,7 +389,7 @@ export component AppWindow inherits Window {
                                     if deleting_preset {
                                         deleted_preset = index;
                                         delete_preset = true;
-                                        update_and_save();
+                                        save();
                                         delete_preset = false;
                                     } else {
                                         dial_values[0] = preset[0];
@@ -383,7 +398,9 @@ export component AppWindow inherits Window {
                                         dial_values[3] = preset[3];
                                         dial_values[4] = preset[4];
                                         dial_values[5] = preset[5];
-                                        update_and_save();
+                                        dials_edited = true;
+                                        save();
+                                        dials_edited = false;
                                     }
                                 }
                             }
@@ -417,19 +434,21 @@ export component AppWindow inherits Window {
 
                             clicked => {
                                 renaming_recording = !renaming_recording;
-                                rename_recording();
+                                renamed_recording = true;
                                 control_buttons = true;
                             }
                         }
 
                         if !renaming_recording:
-                        TouchArea {
+                        rename := TouchArea {
                             mouse-cursor: pointer;
+                            enabled: !recording;
 
                             Image {
                                 source: @image-url("icons/rename.svg");
                                 width: 16px;
                                 height: 16px;
+                                colorize: !rename.enabled ? #5d5d5d : #ffffff;
                             }
 
                             clicked => {
@@ -456,13 +475,15 @@ export component AppWindow inherits Window {
                         }
 
                         if !deleting_recording:
-                        TouchArea {
+                        trash := TouchArea {
                             mouse-cursor: pointer;
+                            enabled: !recording;
 
                             Image {
                                 source: @image-url("icons/trash.svg");
                                 width: 16px;
                                 height: 16px;
+                                colorize: !trash.enabled ? #5d5d5d : #ffffff;
                             }
 
                             clicked => {
@@ -549,7 +570,6 @@ export component AppWindow inherits Window {
                                         deleted_recording = index;
                                         deleted_recording_value = recording_names[index];
                                         delete_recording = true;
-                                        update_and_save();
                                         delete_recordings();
                                         delete_recording = false;
                                         current_recording = 0;
@@ -743,6 +763,8 @@ export component AppWindow inherits Window {
 
                     clicked => {
                         recording = !recording;
+                        deleting_recording = false;
+                        renaming_recording = false;
                         if recording {
                             playing = false;
                             control_buttons = false;
@@ -751,6 +773,7 @@ export component AppWindow inherits Window {
                             new_recording = true;
                         }
                         record();
+                        new_recording = false;
                     }
                 }
             }
