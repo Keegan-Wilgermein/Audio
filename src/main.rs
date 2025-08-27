@@ -2,7 +2,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 // -------- Imports --------
-use std::{error::Error as STDError, ffi::OsString, fs, sync::{Arc, Mutex, RwLock}, thread::{self, Thread}};
+use std::{error::Error as STDError, ffi::OsString, fs::{self, rename}, sync::{Arc, Mutex, RwLock}, thread::{self, Thread}};
 use savefile::{load_file, save_file};
 use savefile_derive::Savefile;
 use slint::{Model, ModelRc, SharedString, ToSharedString, VecModel};
@@ -20,16 +20,20 @@ enum Error {
     RecordError,
     WriteError,
     ReadError,
+    RenameError,
+    DeleteError,
 }
 
 impl Error {
-    fn get_text(kind: Error) -> String {
+    fn get_text(kind: Error) -> SharedString {
         match kind {
-            Error::SaveError => String::from("Failed to save data ... Reverting to previous save"),
-            Error::LoadError => String::from("Data doesn't exist ... Creating new file"),
-            Error::RecordError => String::from("Recording failed ... Please try again"),
-            Error::WriteError => String::from("Failed to write audio"),
-            Error::ReadError => String::from("Failed to read files"),
+            Error::SaveError => SharedString::from("Failed to save data ... Reverting to previous save"),
+            Error::LoadError => SharedString::from("Data doesn't exist ... Creating new file"),
+            Error::RecordError => SharedString::from("Recording failed ... Please try again"),
+            Error::WriteError => SharedString::from("Failed to write audio"),
+            Error::ReadError => SharedString::from("Failed to read files"),
+            Error::RenameError => SharedString::from("Failed to rename file"),
+            Error::DeleteError => SharedString::from("Failed to delete file"),
         }
     }
 }
@@ -37,10 +41,13 @@ impl Error {
 // Successes
 enum Success {
     SaveSuccess,
-    RecordSuccess
+    RecordSuccess,
+    RenameSuccess,
+    DeleteSuccess,
 }
 
 // File stuff
+#[derive(PartialEq)]
 enum File {
     Names(Vec<String>),
 }
@@ -100,6 +107,30 @@ impl File {
         }
 
         String::from(name)
+    }
+
+    fn rename(names: Vec<String>) -> Result<Success, Error> {
+        let old = match File::search("./", "wav") {
+            Ok(File::Names(value)) => value,
+            Err(_) => vec![String::from("Couldn't read names")],
+        };
+
+        for recording in 0..names.len() {
+            match rename(format!("./{}.wav", old[recording]), format!("{}.wav", names[recording])) {
+                Ok(_) => {
+                },
+                Err(error) => {
+                    println!("{}", error);
+                    return Err(Error::RenameError);
+                },
+            };
+        }
+
+        Ok(Success::RenameSuccess)
+    }
+
+    fn delete(names: Vec<String>) {
+
     }
 }
 
@@ -259,6 +290,15 @@ impl Recording {
         } else {
             true
         }
+    }
+
+    fn get_renamed_names(list: ModelRc<SharedString>, length: &usize) -> Vec<String> {
+        let mut new = vec![];
+        for name in 0..*length {
+            new.push(String::from(list.row_data(name).unwrap()));
+        }
+
+        new
     }
 }
 
@@ -468,7 +508,7 @@ fn main() -> Result<(), Box<dyn STDError>> {
 
             match load_error {
                 Some(value) => {
-                    ui.set_error_notification(slint::SharedString::from(Error::get_text(value)));
+                    ui.set_error_notification(Error::get_text(value));
                     ui.set_error_recieved(true);
                     load_error = None;
                 },
@@ -539,6 +579,7 @@ fn main() -> Result<(), Box<dyn STDError>> {
         let ui_handle = ui.as_weak();
 
         let tracker_ref_count = Arc::clone(&tracker);
+        let poison_count = tracker.clone();
 
         move || {
             let ui = ui_handle.unwrap();
@@ -547,9 +588,9 @@ fn main() -> Result<(), Box<dyn STDError>> {
                 match tracker_ref_count.record() {
                     Ok(_) => (),
                     Err(error) => {
-                        ui.set_error_notification(slint::SharedString::from(Error::get_text(error)));
+                        ui.set_error_notification(Error::get_text(error));
                         ui.set_error_recieved(true);
-                        tracker.recorder.clear_poison();
+                        poison_count.recorder.clear_poison();
                         ui.set_recording(false);
                         tracker_ref_count.stop();
                     }
@@ -558,6 +599,31 @@ fn main() -> Result<(), Box<dyn STDError>> {
                 tracker_ref_count.stop();
                 ui.invoke_update_and_save();
             }
+        }
+    });
+
+    ui.on_rename_recording({
+        let ui_handle = ui.as_weak();
+
+        let rename_ref_count = tracker.settings.clone();
+
+        move || {
+            let ui = ui_handle.unwrap();
+
+            let settings = rename_ref_count.read().unwrap();
+
+            let index_data = settings.get_index_data();
+
+            let names = Recording::get_renamed_names(ui.get_recording_names(), &index_data.recording_length);
+
+            match File::rename(names) {
+                Ok(_) => {
+                },
+                Err(error) => {
+                    ui.set_error_notification(Error::get_text(error));
+                    ui.set_error_recieved(true);
+                }
+            };
         }
     });
 
