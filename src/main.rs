@@ -304,15 +304,6 @@ impl Recording {
         ModelRc::new(VecModel::from(new_list))
     }
 
-    fn get_names_from_self(list: &Vec<Recording>) -> Vec<String> {
-        let mut new = vec![];
-        for name in 0..list.len() {
-            new.push(String::from(list[name].name.clone()));
-        }
-
-        new
-    }
-
     fn send_values(list: &Vec<Recording>, length: &usize) -> ModelRc<ModelRc<i32>> {
         let mut all_recording_values = vec![];
         for values in 0..*length {
@@ -678,7 +669,7 @@ fn main() -> Result<(), Box<dyn STDError>> {
             let ui = ui_handle.unwrap();
 
             // This block is used to drop the write lock on the stored data as soon as the last write is completed
-            // This frees it to be used elsewhere slightly quicker
+            // This frees it to be used in the function called underneath
             {
                 // Acquires write access to the loaded data
                 let mut settings = update_ref_count.write().unwrap();
