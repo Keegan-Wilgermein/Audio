@@ -8,6 +8,7 @@ use savefile_derive::Savefile;
 use slint::{Model, ModelRc, SharedString, ToSharedString, VecModel};
 use qruhear::{RUHear, RUBuffers, rucallback};
 use hound::{WavWriter, SampleFormat, WavSpec};
+use kira::{AudioManager, AudioManagerSettings, DefaultBackend, sound::static_sound::StaticSoundData};
 
 slint::include_modules!();
 
@@ -25,6 +26,8 @@ enum Error {
     FallbackError,
     EmptyError,
     ExistsError,
+    PlaybackError,
+    ControllerError,
 }
 
 impl Error {
@@ -34,22 +37,16 @@ impl Error {
             Error::LoadError => SharedString::from("Data doesn't exist ... Creating new file"),
             Error::RecordError => SharedString::from("Recording failed ... Please try again"),
             Error::WriteError => SharedString::from("Failed to write audio"),
-            Error::ReadError => SharedString::from("Failed to read files"),
+            Error::ReadError => SharedString::from("File read failed"),
             Error::RenameError => SharedString::from("Failed to rename file"),
             Error::DeleteError => SharedString::from("Failed to delete file"),
             Error::FallbackError => SharedString::from("Can't rename to fallback name"),
             Error::EmptyError => SharedString::from("Name has to contain something"),
             Error::ExistsError => SharedString::from("Name already exists"),
+            Error::PlaybackError => SharedString::from("Failed to play audio"),
+            Error::ControllerError => SharedString::from("Audio controller crashed ... restart required"),
         }
     }
-}
-
-// Successes
-enum Success {
-    SaveSuccess,
-    RecordSuccess,
-    RenameSuccess,
-    DeleteSuccess,
 }
 
 // File stuff
@@ -115,29 +112,22 @@ impl File {
         String::from(name)
     }
 
-    fn rename(names: Vec<String>) -> Result<Success, Error> {
-        let old = match File::search("./", "wav") {
-            Ok(File::Names(value)) => value,
-            Err(_) => vec![String::from("Couldn't read names")],
+    fn rename(old: &String, name: String) -> Option<Error> {
+        match rename(format!("{}.wav", old), format!("{}.wav", name)) {
+            Ok(_) => {
+            },
+            Err(_) => {
+                return Some(Error::RenameError);
+            },
         };
 
-        for recording in 0..names.len() {
-            match rename(format!("./{}.wav", old[recording]), format!("{}.wav", names[recording])) {
-                Ok(_) => {
-                },
-                Err(_) => {
-                    return Err(Error::RenameError);
-                },
-            };
-        }
-
-        Ok(Success::RenameSuccess)
+        None
     }
 
-    fn delete(name: String) -> Result<Success, Error> {
+    fn delete(name: String) -> Option<Error> {
         match remove_file(format!("./{}.wav", name)) {
-            Ok(_) => Ok(Success::DeleteSuccess),
-            Err(_) => Err(Error::DeleteError),
+            Ok(_) => None,
+            Err(_) => Some(Error::DeleteError),
         }
     }
 
@@ -151,6 +141,48 @@ impl File {
         }
 
         check
+    }
+
+    fn play(file: String) -> Option<Error> {
+
+        let state = match thread::Builder::new().name(String::from("Player")).spawn(move || {
+
+            let mut audio_manager = match AudioManager::<DefaultBackend>::new(AudioManagerSettings::default()) {
+                Ok(value) => value,
+                Err(_) => {
+                    return Some(Error::ControllerError);
+                }
+            };
+
+            let sound_data = match StaticSoundData::from_file(file) {
+                Ok(value) => value,
+                Err(_) => {
+                    return Some(Error::ReadError);
+                }
+            };
+
+            let length = sound_data.duration();
+
+            let mut sound = match audio_manager.play(sound_data.clone()) {
+                Ok(value) => value,
+                Err(_) => {
+                    return Some(Error::PlaybackError);
+                }
+            };
+
+            thread::sleep(length);
+
+            None
+        }) {
+            Ok(_) => None,
+            Err(_) => Some(Error::PlaybackError),
+        };
+
+        state
+    }
+
+    fn stop() {
+        
     }
 }
 
@@ -168,9 +200,9 @@ struct Preset {
     bass: i32,
     vocals: i32,
     treble: i32,
-    gain: i32,
+    distortion: i32,
     reverb: i32,
-    crush: i32,
+    compression: i32,
 }
 
 impl Preset {
@@ -180,9 +212,9 @@ impl Preset {
             bass: values[0],
             vocals: values[1],
             treble: values[2],
-            gain: values[3],
+            distortion: values[3],
             reverb: values[4],
-            crush: values[5],
+            compression: values[5],
         }
     }
 
@@ -202,9 +234,9 @@ impl Preset {
             preset_values.push(list[values].bass);
             preset_values.push(list[values].vocals);
             preset_values.push(list[values].treble);
-            preset_values.push(list[values].gain);
+            preset_values.push(list[values].distortion);
             preset_values.push(list[values].reverb);
-            preset_values.push(list[values].crush);
+            preset_values.push(list[values].compression);
 
             all_preset_values.push(ModelRc::new(VecModel::from(preset_values)));
         }
@@ -219,9 +251,9 @@ struct Recording {
     bass: i32,
     vocals: i32,
     treble: i32,
-    gain: i32,
+    distortion: i32,
     reverb: i32,
-    crush: i32,
+    compression: i32,
 }
 
 impl Recording {
@@ -231,9 +263,9 @@ impl Recording {
             bass: 0,
             vocals: 0,
             treble: 0,
-            gain: 0,
+            distortion: 0,
             reverb: 0,
-            crush: 0,
+            compression: 0,
         }
     }
 
@@ -243,9 +275,9 @@ impl Recording {
             bass: values[0],
             vocals: values[1],
             treble: values[2],
-            gain: values[3],
+            distortion: values[3],
             reverb: values[4],
-            crush: values[5],
+            compression: values[5],
         }
     }
 
@@ -255,9 +287,9 @@ impl Recording {
         list[0] = recording.bass;
         list[1] = recording.vocals;
         list[2] = recording.treble;
-        list[3] = recording.gain;
+        list[3] = recording.distortion;
         list[4] = recording.reverb;
-        list[5] = recording.crush;
+        list[5] = recording.compression;
 
         list
     }
@@ -289,9 +321,9 @@ impl Recording {
             recording_values.push(list[values].bass);
             recording_values.push(list[values].vocals);
             recording_values.push(list[values].treble);
-            recording_values.push(list[values].gain);
+            recording_values.push(list[values].distortion);
             recording_values.push(list[values].reverb);
-            recording_values.push(list[values].crush);
+            recording_values.push(list[values].compression);
 
             all_recording_values.push(ModelRc::new(VecModel::from(recording_values)));
         }
@@ -304,19 +336,31 @@ impl Recording {
         let mut fallback_error_occured = false;
         let mut empty_error_occured = false;
         let mut exists_error_occured = false;
+        let mut rename_failed = (false, None);
 
         for name in 0..old.len() {
-            if new.row_data(name).unwrap() == String::from("Default taken...") {
-                recording_list.push(Recording::from(String::from(old[name].name.clone()), Recording::parse(&old[name])));
-                fallback_error_occured = true;
-            } else if new.row_data(name).unwrap().is_empty() || new.row_data(name).unwrap() == String::from("") {
-                recording_list.push(Recording::from(String::from(old[name].name.clone()), Recording::parse(&old[name])));
-                empty_error_occured = true;
-            } else if File::exists(String::from(new.row_data(name).unwrap()), &old) {
-                recording_list.push(Recording::from(String::from(old[name].name.clone()), Recording::parse(&old[name])));
-                exists_error_occured = true;
+            if new.row_data(name).unwrap() != old[name].name {
+                if new.row_data(name).unwrap() == String::from("Default taken...") {
+                    recording_list.push(Recording::from(old[name].name.clone(), Recording::parse(&old[name])));
+                    fallback_error_occured = true;
+                } else if new.row_data(name).unwrap().is_empty() || new.row_data(name).unwrap() == String::from("") {
+                    recording_list.push(Recording::from(old[name].name.clone(), Recording::parse(&old[name])));
+                    empty_error_occured = true;
+                } else if File::exists(String::from(new.row_data(name).unwrap()), &old) {
+                    recording_list.push(Recording::from(old[name].name.clone(), Recording::parse(&old[name])));
+                    exists_error_occured = true;
+                } else {
+                    match File::rename(&old[name].name, String::from(new.row_data(name).unwrap())) {
+                        Some(error) => {
+                            rename_failed = (true, Some(error));
+                        },
+                        None => {
+                        }
+                    }
+                    recording_list.push(Recording::from(String::from(new.row_data(name).unwrap()), Recording::parse(&old[name])));
+                }
             } else {
-                recording_list.push(Recording::from(String::from(new.row_data(name).unwrap()), Recording::parse(&old[name])));
+                recording_list.push(Recording::from(old[name].name.clone(), Recording::parse(&old[name])));
             }
         }
         
@@ -326,6 +370,8 @@ impl Recording {
             Err((recording_list, Error::EmptyError))
         } else if fallback_error_occured {
             Err((recording_list, Error::FallbackError))
+        } else if rename_failed.0 {
+            Err((recording_list, rename_failed.1.unwrap()))
         } else {
             Ok(recording_list)
         }
@@ -441,16 +487,6 @@ impl Settings {
             updated_recordings.sort_by_key(|recording| recording.name.clone());
             self.recordings = updated_recordings;
         }
-
-        // Rename recording files after safety checks
-        match File::rename(Recording::get_names_from_self(&self.recordings)) {
-            Ok(_) => {
-            },
-            Err(error) => {
-                new.set_error_notification(Error::get_text(error));
-                new.set_error_recieved(true);
-            }
-        };
     }
 }
 
@@ -468,7 +504,7 @@ impl Tracker {
         }
     }
 
-    fn record(self: &Arc<Self>) -> Result<Success, Error> {
+    fn record(self: &Arc<Self>) -> Option<Error> {
         let current_thread = Arc::clone(self);
 
         let state = match thread::Builder::new().name(String::from("Recorder")).spawn(move || {
@@ -507,7 +543,7 @@ impl Tracker {
             let mut writer = match WavWriter::create(new_name, audio_spec) {
                 Ok(value) => value,
                 Err(_) => {
-                    return Err(Error::WriteError);
+                    return Some(Error::WriteError);
                 }
             };
             
@@ -522,25 +558,27 @@ impl Tracker {
             let mut recorder = RUHear::new(callback);
 
             match recorder.start() {
-                Ok(_) => Success::RecordSuccess,
+                Ok(_) => {
+                },
                 Err(_) => {
-                    return Err(Error::RecordError);
+                    return Some(Error::RecordError);
                 },
             };
 
             thread::park();
 
             match recorder.stop() {
-                Ok(_) => Success::RecordSuccess,
+                Ok(_) => {
+                },
                 Err(_) => {
-                    return Err(Error::RecordError);
+                    return Some(Error::RecordError);
                 },
             };
 
-            return Ok(Success::RecordSuccess);
+            return None;
         }) {
-            Ok(_) => Ok(Success::RecordSuccess),
-            Err(_) => Err(Error::RecordError),
+            Ok(_) => None,
+            Err(_) => Some(Error::RecordError),
         };
 
         state
@@ -558,10 +596,10 @@ impl Tracker {
 }
 
 // -------- Functions --------
-fn save(data: &Settings) -> Result<Success, Error> {
+fn save(data: &Settings) -> Option<Error> {
     match save_file("settings.bin", 0, data) {
-        Ok(_) => Ok(Success::SaveSuccess),
-        Err(_) => Err(Error::SaveError),
+        Ok(_) => None,
+        Err(_) => Some(Error::SaveError),
     }
 }
 
@@ -575,14 +613,14 @@ fn load() -> Result<Settings, Error> {
 fn main() -> Result<(), Box<dyn STDError>> {
     let ui = AppWindow::new()?;
 
-    let mut load_error = None;
+    let mut setup_error = None;
 
     // Creates a variable that can be used across threads and move blocks and can be read from without locking
     let tracker = Arc::new(Tracker::new(match load() {
         Ok(value) => value,
         Err(error) => {
             let _ = save(&Settings::new());
-            load_error = Some(error);
+            setup_error = Some(error);
             Settings::new()
         }
     }));
@@ -595,16 +633,15 @@ fn main() -> Result<(), Box<dyn STDError>> {
         move || {
             let ui = ui_handle.unwrap();
 
-            match load_error {
+            match setup_error {
                 Some(value) => {
                     ui.set_error_notification(Error::get_text(value));
                     ui.set_error_recieved(true);
-                    load_error = None;
+                    setup_error = None;
                 },
                 None => {
-
                 }
-            }
+            };
 
             if ui.get_started() {
                 // Acquires write access to the loaded data
@@ -667,29 +704,19 @@ fn main() -> Result<(), Box<dyn STDError>> {
 
             if ui.get_recording() {
                 match tracker_ref_count.record() {
-                    Ok(_) => (),
-                    Err(error) => {
+                    Some(error) => {
                         ui.set_error_notification(Error::get_text(error));
                         ui.set_error_recieved(true);
                         poison_count.recorder.clear_poison();
                         ui.set_recording(false);
                         tracker_ref_count.stop();
-                    }
+                    },
+                    None => (),
                 }
             } else {
                 tracker_ref_count.stop();
                 ui.invoke_save();
             }
-        }
-    });
-
-    ui.on_rename_recording({
-        let ui_handle = ui.as_weak();
-
-        move || {
-            let ui = ui_handle.unwrap();
-
-            ui.invoke_save();
         }
     });
 
@@ -700,15 +727,39 @@ fn main() -> Result<(), Box<dyn STDError>> {
             let ui = ui_handle.unwrap();
 
             match File::delete(String::from(ui.get_deleted_recording_value())) {
-                Ok(_) => {
-                },
-                Err(error) => {
+                Some(error) => {
                     ui.set_error_notification(Error::get_text(error));
                     ui.set_error_recieved(true);
-                }
+                },
+                None => {
+                },
             };
 
             ui.invoke_save();
+        }
+    });
+
+    ui.on_play_pause({
+        let ui_handle = ui.as_weak();
+
+        move || {
+            let ui = ui_handle.unwrap();
+
+            let file = String::from(ui.get_recording_names().row_data(ui.get_current_recording() as usize).unwrap());
+
+            if ui.get_playing() {
+                match File::play(format!("{}.wav", file)) {
+                    Some(error) => {
+                        ui.set_error_notification(Error::get_text(error));
+                        ui.set_error_recieved(true);
+                        ui.set_playing(false);
+                    },
+                    None => {
+                    },
+                }
+            } else {
+                File::stop();
+            }
         }
     });
 

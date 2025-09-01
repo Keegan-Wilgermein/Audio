@@ -5,7 +5,7 @@ export component AppWindow inherits Window {
     title: "audio";
 
     // -------- Variables --------
-    private property <[[string]]> dials: [["Bass", "Vocals", "Treble"], ["Gain", "Reverb", "Crush"]];
+    private property <[[string]]> dials: [["Bass", "Vocals", "Treble"], ["Distort", "Reverb", "Compress"]];
     out property <bool> dials_edited: false;
 
     in-out property <bool> started: true;
@@ -28,7 +28,7 @@ export component AppWindow inherits Window {
 
     out property <[int]> dial_values: [0, 0, 0, 0, 0, 0];
 
-    private property <bool> playing: false;
+    in-out property <bool> playing: false;
     in-out property <bool> recording: false;
 
     private property <length> snap_by: 10px;
@@ -49,9 +49,9 @@ export component AppWindow inherits Window {
     // -------- Callbacks --------
     callback update();
     callback save();
-    callback rename_recording();
     callback delete_recordings();
     callback record();
+    callback play_pause();
 
     // -------- Timers --------
     // Loads settings to UI on startup
@@ -89,7 +89,7 @@ export component AppWindow inherits Window {
         running: renamed_recording;
 
         triggered => {
-            rename_recording();
+            save();
             renamed_recording = false;
         }
     }
@@ -102,6 +102,28 @@ export component AppWindow inherits Window {
         triggered => {
             error_notification = "";
             error-recieved = false;
+        }
+    }
+
+    // Reenable the recording button after a short period
+    Timer {
+        interval: 1s;
+        running: !recorder.enabled;
+
+        triggered => {
+            recorder.enabled = true;
+        }
+    }
+
+    // Periodically check for file changes
+    Timer {
+        interval: 5s;
+        running: !renaming_recording && !renaming_preset;
+
+        triggered => {
+            started = true;
+            save();
+            started = false;
         }
     }
 
@@ -328,6 +350,46 @@ export component AppWindow inherits Window {
                             animate spacing {
                                 duration: 0.3s;
                                 easing: ease-in-out-back;
+                            }
+
+                            TouchArea {
+                                mouse-cursor: pointer;
+                                enabled: !renaming_preset && !deleting_preset;
+
+                                Rectangle {
+                                    border-radius: 8px;
+                                    background: #ffffff00;
+
+                                    VerticalLayout {
+                                        padding: 0px;
+                                        spacing: 4px;
+                                        alignment: start;
+            
+                                        Text {
+                                            text: deleting_preset ? "Can't delete preset" : renaming_preset ? "Can't rename preset" : "Reset";
+                                            font-weight: 700;
+                                            overflow: elide;
+                                        }
+                
+                                        Text {
+                                            text: "0  0  0  0  0  0";
+                                            overflow: elide;
+                                            vertical-alignment: center;
+                                        }
+                                    }
+                                }
+
+                                clicked => {
+                                    dial_values[0] = 0;
+                                    dial_values[1] = 0;
+                                    dial_values[2] = 0;
+                                    dial_values[3] = 0;
+                                    dial_values[4] = 0;
+                                    dial_values[5] = 0;
+                                    dials_edited = true;
+                                    save();
+                                    dials_edited = false;
+                                }
                             }
 
                             for preset[index] in preset_values:
@@ -689,6 +751,7 @@ export component AppWindow inherits Window {
 
                         clicked => {
                             playing = !playing;
+                            play_pause();
                         }
                     }
 
@@ -726,7 +789,7 @@ export component AppWindow inherits Window {
                     }
                 }
 
-                TouchArea {
+                recorder := TouchArea {
                     mouse-cursor: pointer;
 
                     Rectangle {
@@ -748,7 +811,7 @@ export component AppWindow inherits Window {
                                 source: @image-url("icons/stop-circle.svg");
                                 width: 20px;
                                 height: 20px;
-                                colorize: #ec4747;
+                                colorize: recorder.enabled ?  #ec4747 : #912e2e;
                             }
 
                             if !recording:
@@ -756,7 +819,7 @@ export component AppWindow inherits Window {
                                 source: @image-url("icons/circle.svg");
                                 width: 20px;
                                 height: 20px;
-                                colorize: #ec4747;
+                                colorize: recorder.enabled ?  #ec4747 : #912e2e;
                             }
                         }
                     }
@@ -772,6 +835,7 @@ export component AppWindow inherits Window {
                             control_buttons = true;
                             new_recording = true;
                         }
+                        self.enabled = false;
                         record();
                         new_recording = false;
                     }
