@@ -8,7 +8,7 @@ use savefile_derive::Savefile;
 use slint::{Model, ModelRc, SharedString, ToSharedString, VecModel};
 use qruhear::{RUHear, RUBuffers, rucallback};
 use hound::{WavWriter, SampleFormat, WavSpec};
-use kira::{AudioManager, AudioManagerSettings, DefaultBackend, sound::static_sound::StaticSoundData};
+use kira::{effect::{distortion::{DistortionBuilder, DistortionKind}, eq_filter::{EqFilterBuilder, EqFilterKind}, reverb::ReverbBuilder}, sound::static_sound::StaticSoundData, track::TrackBuilder, AudioManager, AudioManagerSettings, DefaultBackend};
 
 slint::include_modules!();
 
@@ -143,7 +143,7 @@ impl File {
         check
     }
 
-    fn play(file: String) -> Option<Error> {
+    fn play(file: String, values: Recording) -> Option<Error> {
 
         let state = match thread::Builder::new().name(String::from("Player")).spawn(move || {
 
@@ -154,6 +154,36 @@ impl File {
                 }
             };
 
+            let mut track = audio_manager.add_sub_track({
+                let mut builder = TrackBuilder::new();
+                builder.add_effect(EqFilterBuilder::new(
+                    EqFilterKind::LowShelf,
+                    250.0,
+                    values.bass as f32 * 1.5,
+                    0.5)); // Edit bass
+                builder.add_effect(EqFilterBuilder::new(
+                    EqFilterKind::Bell,
+                    3500.0,
+                    values.vocals as f32 * 1.5,
+                    0.1)); // Edit vocals
+                builder.add_effect(EqFilterBuilder::new(
+                    EqFilterKind::HighShelf,
+                    6000.0,
+                    values.treble as f32 * 1.5,
+                    0.5)); // Edit treble
+                builder.add_effect(DistortionBuilder::new()
+                .kind(DistortionKind::HardClip)
+                .drive(values.distortion as f32 * 1.5)
+                .mix(0.8)); // Edit distortion
+                builder.add_effect(ReverbBuilder::new()
+                .feedback(values.reverb as f64 * 0.1)
+                .damping(0.1)
+                .stereo_width(0.0)
+                .mix(0.8)); // Edit reverb
+                // Add panning control
+                builder
+            }).unwrap();
+
             let sound_data = match StaticSoundData::from_file(file) {
                 Ok(value) => value,
                 Err(_) => {
@@ -163,7 +193,7 @@ impl File {
 
             let length = sound_data.duration();
 
-            let mut sound = match audio_manager.play(sound_data.clone()) {
+            let _ = match track.play(sound_data) {
                 Ok(value) => value,
                 Err(_) => {
                     return Some(Error::PlaybackError);
@@ -202,7 +232,7 @@ struct Preset {
     treble: i32,
     distortion: i32,
     reverb: i32,
-    compression: i32,
+    pan: i32,
 }
 
 impl Preset {
@@ -214,7 +244,7 @@ impl Preset {
             treble: values[2],
             distortion: values[3],
             reverb: values[4],
-            compression: values[5],
+            pan: values[5],
         }
     }
 
@@ -236,7 +266,7 @@ impl Preset {
             preset_values.push(list[values].treble);
             preset_values.push(list[values].distortion);
             preset_values.push(list[values].reverb);
-            preset_values.push(list[values].compression);
+            preset_values.push(list[values].pan);
 
             all_preset_values.push(ModelRc::new(VecModel::from(preset_values)));
         }
@@ -245,7 +275,7 @@ impl Preset {
 }
 
 // Recording data
-#[derive(Savefile, Debug)]
+#[derive(Savefile, Clone)]
 struct Recording {
     name: String,
     bass: i32,
@@ -253,7 +283,7 @@ struct Recording {
     treble: i32,
     distortion: i32,
     reverb: i32,
-    compression: i32,
+    pan: i32,
 }
 
 impl Recording {
@@ -265,7 +295,7 @@ impl Recording {
             treble: 0,
             distortion: 0,
             reverb: 0,
-            compression: 0,
+            pan: 0,
         }
     }
 
@@ -277,7 +307,7 @@ impl Recording {
             treble: values[2],
             distortion: values[3],
             reverb: values[4],
-            compression: values[5],
+            pan: values[5],
         }
     }
 
@@ -289,7 +319,7 @@ impl Recording {
         list[2] = recording.treble;
         list[3] = recording.distortion;
         list[4] = recording.reverb;
-        list[5] = recording.compression;
+        list[5] = recording.pan;
 
         list
     }
@@ -314,7 +344,7 @@ impl Recording {
             recording_values.push(list[values].treble);
             recording_values.push(list[values].distortion);
             recording_values.push(list[values].reverb);
-            recording_values.push(list[values].compression);
+            recording_values.push(list[values].pan);
 
             all_recording_values.push(ModelRc::new(VecModel::from(recording_values)));
         }
@@ -733,13 +763,17 @@ fn main() -> Result<(), Box<dyn STDError>> {
     ui.on_play_pause({
         let ui_handle = ui.as_weak();
 
+        let player_ref_count = tracker.settings.clone();
+
         move || {
             let ui = ui_handle.unwrap();
+
+            let settings = player_ref_count.read().unwrap();
 
             let file = String::from(ui.get_recording_names().row_data(ui.get_current_recording() as usize).unwrap());
 
             if ui.get_playing() {
-                match File::play(format!("{}.wav", file)) {
+                match File::play(format!("{}.wav", file), settings.recordings[ui.get_current_recording() as usize].clone()) {
                     Some(error) => {
                         ui.set_error_notification(Error::get_text(error));
                         ui.set_error_recieved(true);
