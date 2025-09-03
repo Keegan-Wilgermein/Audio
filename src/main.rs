@@ -8,7 +8,7 @@ use savefile_derive::Savefile;
 use slint::{Model, ModelRc, SharedString, ToSharedString, VecModel};
 use qruhear::{RUHear, RUBuffers, rucallback};
 use hound::{WavWriter, SampleFormat, WavSpec};
-use kira::{effect::{distortion::{DistortionBuilder, DistortionKind}, eq_filter::{EqFilterBuilder, EqFilterKind}, reverb::ReverbBuilder}, sound::static_sound::StaticSoundData, track::TrackBuilder, AudioManager, AudioManagerSettings, DefaultBackend};
+use kira::{effect::eq_filter::{EqFilterBuilder, EqFilterKind}, sound::static_sound::StaticSoundData, track::TrackBuilder, AudioManager, AudioManagerSettings, DefaultBackend};
 
 slint::include_modules!();
 
@@ -159,27 +159,28 @@ impl File {
                 builder.add_effect(EqFilterBuilder::new(
                     EqFilterKind::LowShelf,
                     250.0,
-                    values.bass as f32 * 1.5,
-                    0.5)); // Edit bass
+                    values.sub_bass as f32 * 1.5,
+                    0.5)); // Edit sub bass
                 builder.add_effect(EqFilterBuilder::new(
                     EqFilterKind::Bell,
                     3500.0,
-                    values.vocals as f32 * 1.5,
-                    0.1)); // Edit vocals
+                    values.bass as f32 * 1.5,
+                    0.1)); // Edit bass
                 builder.add_effect(EqFilterBuilder::new(
+                    EqFilterKind::Bell,
+                    6000.0,
+                    values.mids as f32 * 1.5,
+                    0.5)); // Edit mids
+                    builder.add_effect(EqFilterBuilder::new(
+                    EqFilterKind::Bell,
+                    6000.0,
+                    values.vocals as f32 * 1.5,
+                    0.5)); // Edit vocals
+                    builder.add_effect(EqFilterBuilder::new(
                     EqFilterKind::HighShelf,
                     6000.0,
                     values.treble as f32 * 1.5,
                     0.5)); // Edit treble
-                builder.add_effect(DistortionBuilder::new()
-                .kind(DistortionKind::HardClip)
-                .drive(values.distortion as f32 * 1.5)
-                .mix(0.8)); // Edit distortion
-                builder.add_effect(ReverbBuilder::new()
-                .feedback(values.reverb as f64 * 0.1)
-                .damping(0.1)
-                .stereo_width(0.0)
-                .mix(0.8)); // Edit reverb
                 // Add panning control
                 builder
             }).unwrap();
@@ -227,11 +228,11 @@ struct IndexData {
 #[derive(Savefile)]
 struct Preset {
     name: String,
+    sub_bass: i32,
     bass: i32,
+    mids: i32,
     vocals: i32,
     treble: i32,
-    distortion: i32,
-    reverb: i32,
     pan: i32,
 }
 
@@ -239,11 +240,11 @@ impl Preset {
     fn from(values: [i32; 6]) -> Preset {
         Preset {
             name: String::from("New Preset"),
-            bass: values[0],
-            vocals: values[1],
-            treble: values[2],
-            distortion: values[3],
-            reverb: values[4],
+            sub_bass: values[0],
+            bass: values[1],
+            mids: values[2],
+            vocals: values[3],
+            treble: values[4],
             pan: values[5],
         }
     }
@@ -261,11 +262,11 @@ impl Preset {
         for values in 0..*length {
             let mut preset_values = vec![];
             
+            preset_values.push(list[values].sub_bass);
             preset_values.push(list[values].bass);
+            preset_values.push(list[values].mids);
             preset_values.push(list[values].vocals);
             preset_values.push(list[values].treble);
-            preset_values.push(list[values].distortion);
-            preset_values.push(list[values].reverb);
             preset_values.push(list[values].pan);
 
             all_preset_values.push(ModelRc::new(VecModel::from(preset_values)));
@@ -278,11 +279,11 @@ impl Preset {
 #[derive(Savefile, Clone)]
 struct Recording {
     name: String,
+    sub_bass: i32,
     bass: i32,
+    mids: i32,
     vocals: i32,
     treble: i32,
-    distortion: i32,
-    reverb: i32,
     pan: i32,
 }
 
@@ -290,11 +291,11 @@ impl Recording {
     fn new(name: String) -> Recording {
         Recording {
             name: name,
+            sub_bass: 0,
             bass: 0,
+            mids: 0,
             vocals: 0,
             treble: 0,
-            distortion: 0,
-            reverb: 0,
             pan: 0,
         }
     }
@@ -302,11 +303,11 @@ impl Recording {
     fn from(name: String, values: [i32; 6]) -> Recording {
         Recording {
             name: name,
-            bass: values[0],
-            vocals: values[1],
-            treble: values[2],
-            distortion: values[3],
-            reverb: values[4],
+            sub_bass: values[0],
+            bass: values[1],
+            mids: values[2],
+            vocals: values[3],
+            treble: values[4],
             pan: values[5],
         }
     }
@@ -314,11 +315,11 @@ impl Recording {
     fn parse(recording: &Recording) -> [i32; 6] {
         let mut list = [0, 0, 0, 0, 0, 0];
 
-        list[0] = recording.bass;
-        list[1] = recording.vocals;
-        list[2] = recording.treble;
-        list[3] = recording.distortion;
-        list[4] = recording.reverb;
+        list[0] = recording.sub_bass;
+        list[1] = recording.bass;
+        list[2] = recording.mids;
+        list[3] = recording.vocals;
+        list[4] = recording.treble;
         list[5] = recording.pan;
 
         list
@@ -339,11 +340,11 @@ impl Recording {
         for values in 0..*length {
             let mut recording_values = vec![];
             
+            recording_values.push(list[values].sub_bass);
             recording_values.push(list[values].bass);
+            recording_values.push(list[values].mids);
             recording_values.push(list[values].vocals);
             recording_values.push(list[values].treble);
-            recording_values.push(list[values].distortion);
-            recording_values.push(list[values].reverb);
             recording_values.push(list[values].pan);
 
             all_recording_values.push(ModelRc::new(VecModel::from(recording_values)));
