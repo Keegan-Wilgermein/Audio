@@ -143,7 +143,7 @@ impl File {
         check
     }
 
-    fn play(file: String, values: Arc<RwLock<Settings>>, selected_recording: usize) -> Option<Error> {
+    fn play(file: String, values: Arc<RwLock<Settings>>, selected_recording: usize, paused: Arc<RwLock<bool>>) -> Option<Error> {
 
         let state = match thread::Builder::new().name(String::from("Player")).spawn(move || {
 
@@ -155,9 +155,9 @@ impl File {
             };
 
             let sub_bass = EqFilterBuilder::new(EqFilterKind::LowShelf, 80.0, 0.0, 0.8);
-            let bass = EqFilterBuilder::new(EqFilterKind::Bell, 120.0, 0.0, 0.4);
-            let mids = EqFilterBuilder::new(EqFilterKind::Bell, 500.0, 0.0, 0.2);
-            let vocals = EqFilterBuilder::new(EqFilterKind::Bell, 2500.0, 0.0, 0.2);
+            let bass = EqFilterBuilder::new(EqFilterKind::Bell, 120.0, 0.0, 2.0);
+            let mids = EqFilterBuilder::new(EqFilterKind::Bell, 500.0, 0.0, 2.0);
+            let vocals = EqFilterBuilder::new(EqFilterKind::Bell, 2500.0, 0.0, 2.0);
             let treble = EqFilterBuilder::new(EqFilterKind::HighShelf, 6000.0, 0.0, 0.8);
             let pan = PanningControlBuilder::default();
 
@@ -194,16 +194,41 @@ impl File {
 
             let start = Instant::now();
             while start.elapsed() < length {
-                {
-                    let value = values.try_read().unwrap();
-                    sub_bass_handle.set_gain(value.recordings[selected_recording].sub_bass as f32 * 1.5, Tween::default());
-                    bass_handle.set_gain(value.recordings[selected_recording].bass as f32 * 1.5, Tween::default());
-                    mids_handle.set_gain(value.recordings[selected_recording].mids as f32 * 1.5, Tween::default());
-                    vocals_handle.set_gain(value.recordings[selected_recording].vocals as f32 * 1.5, Tween::default());
-                    treble_handle.set_gain(value.recordings[selected_recording].treble as f32 * 1.5, Tween::default());
+                let should_play = paused.read().unwrap();
+                if *should_play {
+                    let value = values.read().unwrap();
+                    sub_bass_handle.set_gain(if value.recordings[selected_recording].sub_bass == -7 {
+                        -60.0
+                    } else {
+                        value.recordings[selected_recording].sub_bass as f32 * 2.0
+                    }, Tween::default());
+                    bass_handle.set_gain(if value.recordings[selected_recording].bass == -7 {
+                        -60.0
+                    } else {
+                        value.recordings[selected_recording].bass as f32 * 2.0
+                    }, Tween::default());
+                    mids_handle.set_gain(if value.recordings[selected_recording].mids == -7 {
+                        -60.0
+                    } else {
+                        value.recordings[selected_recording].mids as f32 * 2.0
+                    }, Tween::default());
+                    vocals_handle.set_gain(if value.recordings[selected_recording].vocals == -7 {
+                        -60.0
+                    } else {
+                        value.recordings[selected_recording].vocals as f32 * 2.0
+                    }, Tween::default());
+                    treble_handle.set_gain(if value.recordings[selected_recording].treble == -7 {
+                        -60.0
+                    } else {
+                        value.recordings[selected_recording].treble as f32 * 2.0
+                    }, Tween::default());
                     panning_handle.set_panning(value.recordings[selected_recording].pan as f32 * 0.15, Tween::default());
+
+                    drop(should_play);
+                    thread::sleep(Duration::from_millis(50));
+                } else {
+                    break;
                 }
-                thread::sleep(Duration::from_millis(50)); // update every 50ms
             }
 
             None
@@ -215,8 +240,9 @@ impl File {
         state
     }
 
-    fn stop() {
-        
+    fn stop(playing: Arc<RwLock<bool>>) {
+        let mut should_play = playing.write().unwrap();
+        *should_play = false;
     }
 }
 
@@ -519,6 +545,7 @@ impl Settings {
 struct Tracker {
     settings: Arc<RwLock<Settings>>,
     recorder: Arc<Mutex<Option<Thread>>>,
+    playing: Arc<RwLock<bool>>,
 }
 
 impl Tracker {
@@ -526,6 +553,7 @@ impl Tracker {
         Tracker {
             settings: Arc::new(RwLock::new(settings)),
             recorder: Arc::new(Mutex::new(None)),
+            playing: Arc::new(RwLock::new(false)),
         }
     }
 
@@ -767,23 +795,33 @@ fn main() -> Result<(), Box<dyn STDError>> {
     ui.on_play_pause({
         let ui_handle = ui.as_weak();
 
+        let playing = tracker.playing.clone();
+
         move || {
             let ui = ui_handle.unwrap();
 
             let file = String::from(ui.get_recording_names().row_data(ui.get_current_recording() as usize).unwrap());
 
             if ui.get_playing() {
-                match File::play(format!("{}.wav", file), tracker.settings.clone(), ui.get_current_recording() as usize) {
+            {
+                let mut should_play = playing.write().unwrap();
+                *should_play = true;
+            }
+                match File::play(format!("{}.wav", file), tracker.settings.clone(), ui.get_current_recording() as usize, tracker.playing.clone()) {
                     Some(error) => {
                         ui.set_error_notification(Error::get_text(error));
                         ui.set_error_recieved(true);
                         ui.set_playing(false);
+                        {
+                            let mut should_play = playing.write().unwrap();
+                            *should_play = false;
+                        }
                     },
                     None => {
                     },
                 }
             } else {
-                File::stop();
+                File::stop(tracker.playing.clone());
             }
         }
     });
