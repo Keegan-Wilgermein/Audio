@@ -767,12 +767,8 @@ fn main() -> Result<(), Box<dyn STDError>> {
     ui.on_play_pause({
         let ui_handle = ui.as_weak();
 
-        let player_ref_count = tracker.settings.clone();
-
         move || {
             let ui = ui_handle.unwrap();
-
-            let settings = player_ref_count.read().unwrap();
 
             let file = String::from(ui.get_recording_names().row_data(ui.get_current_recording() as usize).unwrap());
 
