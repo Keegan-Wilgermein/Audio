@@ -2,13 +2,13 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 // -------- Imports --------
-use std::{error::Error as STDError, ffi::OsString, fs::{self, remove_file, rename}, sync::{Arc, Mutex, RwLock}, thread::{self, Thread}};
+use std::{error::Error as STDError, ffi::OsString, fs::{self, remove_file, rename}, sync::{Arc, Mutex, RwLock}, thread::{self, Thread}, time::{Duration, Instant}};
 use savefile::{load_file, save_file};
 use savefile_derive::Savefile;
 use slint::{Model, ModelRc, SharedString, ToSharedString, VecModel};
 use qruhear::{RUHear, RUBuffers, rucallback};
 use hound::{WavWriter, SampleFormat, WavSpec};
-use kira::{effect::eq_filter::{EqFilterBuilder, EqFilterKind}, sound::static_sound::StaticSoundData, track::TrackBuilder, AudioManager, AudioManagerSettings, DefaultBackend};
+use kira::{effect::{eq_filter::{EqFilterBuilder, EqFilterKind}, panning_control::PanningControlBuilder}, sound::static_sound::StaticSoundData, track::TrackBuilder, AudioManager, AudioManagerSettings, DefaultBackend, Tween};
 
 slint::include_modules!();
 
@@ -143,7 +143,7 @@ impl File {
         check
     }
 
-    fn play(file: String, values: Recording) -> Option<Error> {
+    fn play(file: String, values: Arc<RwLock<Settings>>, selected_recording: usize) -> Option<Error> {
 
         let state = match thread::Builder::new().name(String::from("Player")).spawn(move || {
 
@@ -154,36 +154,27 @@ impl File {
                 }
             };
 
-            let mut track = audio_manager.add_sub_track({
-                let mut builder = TrackBuilder::new();
-                builder.add_effect(EqFilterBuilder::new(
-                    EqFilterKind::LowShelf,
-                    250.0,
-                    values.sub_bass as f32 * 1.5,
-                    0.5)); // Edit sub bass
-                builder.add_effect(EqFilterBuilder::new(
-                    EqFilterKind::Bell,
-                    3500.0,
-                    values.bass as f32 * 1.5,
-                    0.1)); // Edit bass
-                builder.add_effect(EqFilterBuilder::new(
-                    EqFilterKind::Bell,
-                    6000.0,
-                    values.mids as f32 * 1.5,
-                    0.5)); // Edit mids
-                    builder.add_effect(EqFilterBuilder::new(
-                    EqFilterKind::Bell,
-                    6000.0,
-                    values.vocals as f32 * 1.5,
-                    0.5)); // Edit vocals
-                    builder.add_effect(EqFilterBuilder::new(
-                    EqFilterKind::HighShelf,
-                    6000.0,
-                    values.treble as f32 * 1.5,
-                    0.5)); // Edit treble
-                // Add panning control
-                builder
-            }).unwrap();
+            let sub_bass = EqFilterBuilder::new(EqFilterKind::LowShelf, 80.0, 0.0, 0.8);
+            let bass = EqFilterBuilder::new(EqFilterKind::Bell, 120.0, 0.0, 0.4);
+            let mids = EqFilterBuilder::new(EqFilterKind::Bell, 500.0, 0.0, 0.2);
+            let vocals = EqFilterBuilder::new(EqFilterKind::Bell, 2500.0, 0.0, 0.2);
+            let treble = EqFilterBuilder::new(EqFilterKind::HighShelf, 6000.0, 0.0, 0.8);
+            let pan = PanningControlBuilder::default();
+
+            let mut builder = TrackBuilder::new();
+            let mut sub_bass_handle = builder.add_effect(sub_bass);
+            let mut bass_handle = builder.add_effect(bass);
+            let mut mids_handle = builder.add_effect(mids);
+            let mut vocals_handle = builder.add_effect(vocals);
+            let mut treble_handle = builder.add_effect(treble);
+            let mut panning_handle = builder.add_effect(pan);
+
+            let mut track = match audio_manager.add_sub_track(builder) {
+                Ok(value) => value,
+                Err(_) => {
+                    return Some(Error::PlaybackError);
+                }
+            };
 
             let sound_data = match StaticSoundData::from_file(file) {
                 Ok(value) => value,
@@ -201,7 +192,19 @@ impl File {
                 }
             };
 
-            thread::sleep(length);
+            let start = Instant::now();
+            while start.elapsed() < length {
+                {
+                    let value = values.try_read().unwrap();
+                    sub_bass_handle.set_gain(value.recordings[selected_recording].sub_bass as f32 * 1.5, Tween::default());
+                    bass_handle.set_gain(value.recordings[selected_recording].bass as f32 * 1.5, Tween::default());
+                    mids_handle.set_gain(value.recordings[selected_recording].mids as f32 * 1.5, Tween::default());
+                    vocals_handle.set_gain(value.recordings[selected_recording].vocals as f32 * 1.5, Tween::default());
+                    treble_handle.set_gain(value.recordings[selected_recording].treble as f32 * 1.5, Tween::default());
+                    panning_handle.set_panning(value.recordings[selected_recording].pan as f32 * 0.15, Tween::default());
+                }
+                thread::sleep(Duration::from_millis(50)); // update every 50ms
+            }
 
             None
         }) {
@@ -774,7 +777,7 @@ fn main() -> Result<(), Box<dyn STDError>> {
             let file = String::from(ui.get_recording_names().row_data(ui.get_current_recording() as usize).unwrap());
 
             if ui.get_playing() {
-                match File::play(format!("{}.wav", file), settings.recordings[ui.get_current_recording() as usize].clone()) {
+                match File::play(format!("{}.wav", file), tracker.settings.clone(), ui.get_current_recording() as usize) {
                     Some(error) => {
                         ui.set_error_notification(Error::get_text(error));
                         ui.set_error_recieved(true);
