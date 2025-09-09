@@ -52,6 +52,7 @@ export component AppWindow inherits Window {
     callback delete_recordings();
     callback record();
     callback play_pause();
+    callback sync_playing();
 
     // -------- Timers --------
     // Loads settings to UI on startup
@@ -516,7 +517,9 @@ export component AppWindow inherits Window {
                             clicked => {
                                 deleting_recording = false;
                                 renaming_recording = !renaming_recording;
+                                playing = false;
                                 control_buttons = false;
+                                sync_playing();
                             }
                         }
 
@@ -553,6 +556,7 @@ export component AppWindow inherits Window {
                                 renaming_recording = false;
                                 playing = false;
                                 control_buttons = false;
+                                sync_playing();
                             }
                         }
                     }
@@ -833,11 +837,13 @@ export component AppWindow inherits Window {
                             control_buttons = false;
                         } else {
                             control_buttons = true;
+                            playing = false;
                             new_recording = true;
                         }
                         self.enabled = false;
                         record();
                         new_recording = false;
+                        sync_playing();
                     }
                 }
             }

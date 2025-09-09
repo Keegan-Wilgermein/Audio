@@ -225,6 +225,7 @@ impl File {
                     panning_handle.set_panning(value.recordings[selected_recording].pan as f32 * 0.15, Tween::default());
 
                     drop(should_play);
+                    drop(value);
                     thread::sleep(Duration::from_millis(50));
                 } else {
                     break;
@@ -243,6 +244,7 @@ impl File {
     fn stop(playing: Arc<RwLock<bool>>) {
         let mut should_play = playing.write().unwrap();
         *should_play = false;
+        drop(should_play);
     }
 }
 
@@ -646,6 +648,12 @@ impl Tracker {
 
         *current_thread.recorder.lock().unwrap() = None;
     }
+
+    fn set_playing(set: Arc<RwLock<bool>>, from: bool) {
+        let should_play = set.clone();
+        let mut playing = should_play.write().unwrap();
+        *playing = from;
+    }
 }
 
 // -------- Functions --------
@@ -796,6 +804,9 @@ fn main() -> Result<(), Box<dyn STDError>> {
         let ui_handle = ui.as_weak();
 
         let playing = tracker.playing.clone();
+        let playing2 = tracker.playing.clone();
+
+        let settings = tracker.settings.clone();
 
         move || {
             let ui = ui_handle.unwrap();
@@ -807,7 +818,7 @@ fn main() -> Result<(), Box<dyn STDError>> {
                 let mut should_play = playing.write().unwrap();
                 *should_play = true;
             }
-                match File::play(format!("{}.wav", file), tracker.settings.clone(), ui.get_current_recording() as usize, tracker.playing.clone()) {
+                match File::play(format!("{}.wav", file), settings.clone(), ui.get_current_recording() as usize, playing.clone()) {
                     Some(error) => {
                         ui.set_error_notification(Error::get_text(error));
                         ui.set_error_recieved(true);
@@ -821,8 +832,18 @@ fn main() -> Result<(), Box<dyn STDError>> {
                     },
                 }
             } else {
-                File::stop(tracker.playing.clone());
+                File::stop(playing2.clone());
             }
+        }
+    });
+
+    ui.on_sync_playing({
+        let ui_handle = ui.as_weak();
+        let playing_ref_count = tracker.playing.clone();
+        move || {
+            let ui = ui_handle.unwrap();
+ 
+            Tracker::set_playing(playing_ref_count.clone(), ui.get_playing());
         }
     });
 
