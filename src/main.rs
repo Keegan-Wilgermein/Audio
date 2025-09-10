@@ -8,7 +8,7 @@ use savefile_derive::Savefile;
 use slint::{Model, ModelRc, SharedString, ToSharedString, VecModel};
 use qruhear::{RUHear, RUBuffers, rucallback};
 use hound::{WavWriter, SampleFormat, WavSpec};
-use kira::{effect::{eq_filter::{EqFilterBuilder, EqFilterKind}, panning_control::PanningControlBuilder}, sound::static_sound::StaticSoundData, track::TrackBuilder, AudioManager, AudioManagerSettings, DefaultBackend, Tween};
+use kira::{effect::{eq_filter::{EqFilterBuilder, EqFilterKind}, panning_control::PanningControlBuilder}, sound::static_sound::StaticSoundData, track::TrackBuilder, AudioManager, AudioManagerSettings, DefaultBackend, Easing, StartTime, Tween};
 
 slint::include_modules!();
 
@@ -26,6 +26,7 @@ enum Error {
     FallbackError,
     EmptyError,
     ExistsError,
+    SaveFileRenameError,
     PlaybackError,
     ControllerError,
 }
@@ -34,7 +35,7 @@ impl Error {
     fn get_text(kind: Error) -> SharedString {
         match kind {
             Error::SaveError => SharedString::from("Failed to save data ... Reverting to previous save"),
-            Error::LoadError => SharedString::from("Data doesn't exist ... Creating new file"),
+            Error::LoadError => SharedString::from("Data doesn't exist"),
             Error::RecordError => SharedString::from("Recording failed ... Please try again"),
             Error::WriteError => SharedString::from("Failed to write audio"),
             Error::ReadError => SharedString::from("File read failed"),
@@ -43,6 +44,7 @@ impl Error {
             Error::FallbackError => SharedString::from("Can't rename to fallback name"),
             Error::EmptyError => SharedString::from("Name has to contain something"),
             Error::ExistsError => SharedString::from("Name already exists"),
+            Error::SaveFileRenameError => SharedString::from("Can't rename to 'settings'"),
             Error::PlaybackError => SharedString::from("Failed to play audio"),
             Error::ControllerError => SharedString::from("Audio controller crashed ... restart required"),
         }
@@ -114,8 +116,14 @@ impl File {
 
     fn rename(old: &String, name: String) -> Option<Error> {
         match rename(format!("{}.wav", old), format!("{}.wav", name)) {
-            Ok(_) => {
+            Ok(_) => (),
+            Err(_) => {
+                return Some(Error::RenameError);
             },
+        };
+
+        match rename(format!("{}.bin", old), format!("{}.bin", name)) {
+            Ok(_) => (),
             Err(_) => {
                 return Some(Error::RenameError);
             },
@@ -126,6 +134,12 @@ impl File {
 
     fn delete(name: String) -> Option<Error> {
         match remove_file(format!("./{}.wav", name)) {
+            Ok(_) => (),
+            Err(_) => {
+                return Some(Error::DeleteError);
+            },
+        };
+        match remove_file(format!("./{}.bin", name)) {
             Ok(_) => None,
             Err(_) => Some(Error::DeleteError),
         }
@@ -143,7 +157,7 @@ impl File {
         check
     }
 
-    fn play(file: String, values: Arc<RwLock<Settings>>, selected_recording: usize, paused: Arc<RwLock<bool>>) -> Option<Error> {
+    fn play(file: String, values: Arc<RwLock<Settings>>, selected_recording: usize, paused: Arc<RwLock<bool>>, snapping: bool, snap_playing: bool, mut snapshot: SnapShot) -> Option<Error> {
 
         let state = match thread::Builder::new().name(String::from("Player")).spawn(move || {
 
@@ -176,7 +190,7 @@ impl File {
                 }
             };
 
-            let sound_data = match StaticSoundData::from_file(file) {
+            let sound_data = match StaticSoundData::from_file(file.clone()) {
                 Ok(value) => value,
                 Err(_) => {
                     return Some(Error::ReadError);
@@ -193,44 +207,88 @@ impl File {
             };
 
             let start = Instant::now();
+            let mut frame = 0;
             while start.elapsed() < length {
                 let should_play = paused.read().unwrap();
                 if *should_play {
-                    let value = values.read().unwrap();
-                    sub_bass_handle.set_gain(if value.recordings[selected_recording].sub_bass == -7 {
-                        -60.0
-                    } else {
-                        value.recordings[selected_recording].sub_bass as f32 * 2.0
-                    }, Tween::default());
-                    bass_handle.set_gain(if value.recordings[selected_recording].bass == -7 {
-                        -60.0
-                    } else {
-                        value.recordings[selected_recording].bass as f32 * 2.0
-                    }, Tween::default());
-                    mids_handle.set_gain(if value.recordings[selected_recording].mids == -7 {
-                        -60.0
-                    } else {
-                        value.recordings[selected_recording].mids as f32 * 2.0
-                    }, Tween::default());
-                    vocals_handle.set_gain(if value.recordings[selected_recording].vocals == -7 {
-                        -60.0
-                    } else {
-                        value.recordings[selected_recording].vocals as f32 * 2.0
-                    }, Tween::default());
-                    treble_handle.set_gain(if value.recordings[selected_recording].treble == -7 {
-                        -60.0
-                    } else {
-                        value.recordings[selected_recording].treble as f32 * 2.0
-                    }, Tween::default());
-                    panning_handle.set_panning(value.recordings[selected_recording].pan as f32 * 0.15, Tween::default());
+                    if snap_playing && !snapping {
 
+                        sub_bass_handle.set_gain(if snapshot.frames[frame][0] == -7 {
+                            -60.0
+                        } else {
+                            snapshot.frames[frame][0] as f32 * 2.0
+                        }, Tween { start_time: StartTime::Immediate, duration: Duration::from_secs(0), easing: Easing::Linear });
+                        bass_handle.set_gain(if snapshot.frames[frame][1] == -7 {
+                            -60.0
+                        } else {
+                            snapshot.frames[frame][1] as f32 * 2.0
+                        }, Tween { start_time: StartTime::Immediate, duration: Duration::from_secs(0), easing: Easing::Linear });
+                        mids_handle.set_gain(if snapshot.frames[frame][2] == -7 {
+                            -60.0
+                        } else {
+                            snapshot.frames[frame][2] as f32 * 2.0
+                        }, Tween { start_time: StartTime::Immediate, duration: Duration::from_secs(0), easing: Easing::Linear });
+                        vocals_handle.set_gain(if snapshot.frames[frame][3] == -7 {
+                            -60.0
+                        } else {
+                            snapshot.frames[frame][3] as f32 * 2.0
+                        }, Tween { start_time: StartTime::Immediate, duration: Duration::from_secs(0), easing: Easing::Linear });
+                        treble_handle.set_gain(if snapshot.frames[frame][4] == -7 {
+                            -60.0
+                        } else {
+                            snapshot.frames[frame][4] as f32 * 2.0
+                        }, Tween { start_time: StartTime::Immediate, duration: Duration::from_secs(0), easing: Easing::Linear });
+                        panning_handle.set_panning(snapshot.frames[frame][5] as f32 * 0.15, Tween::default());
+
+                        frame += 1;
+
+                    } else {
+                        let value = values.read().unwrap();
+
+                        if snapping {
+                            snapshot.frames[frame] = Recording::parse(&value.recordings[selected_recording]);
+                            frame += 1;
+                        }
+                        
+                        sub_bass_handle.set_gain(if value.recordings[selected_recording].sub_bass == -7 {
+                            -60.0
+                        } else {
+                            value.recordings[selected_recording].sub_bass as f32 * 2.0
+                        }, Tween::default());
+                        bass_handle.set_gain(if value.recordings[selected_recording].bass == -7 {
+                            -60.0
+                        } else {
+                            value.recordings[selected_recording].bass as f32 * 2.0
+                        }, Tween::default());
+                        mids_handle.set_gain(if value.recordings[selected_recording].mids == -7 {
+                            -60.0
+                        } else {
+                            value.recordings[selected_recording].mids as f32 * 2.0
+                        }, Tween::default());
+                        vocals_handle.set_gain(if value.recordings[selected_recording].vocals == -7 {
+                            -60.0
+                        } else {
+                            value.recordings[selected_recording].vocals as f32 * 2.0
+                        }, Tween::default());
+                        treble_handle.set_gain(if value.recordings[selected_recording].treble == -7 {
+                            -60.0
+                        } else {
+                            value.recordings[selected_recording].treble as f32 * 2.0
+                        }, Tween::default());
+                        panning_handle.set_panning(value.recordings[selected_recording].pan as f32 * 0.15, Tween::default());
+    
+                        
+                        drop(value);
+                    }
+                    
                     drop(should_play);
-                    drop(value);
                     thread::sleep(Duration::from_millis(50));
                 } else {
                     break;
                 }
             }
+            
+            SnapShot::save(snapshot, &File::truncate(file));
 
             None
         }) {
@@ -248,6 +306,16 @@ impl File {
     }
 }
 
+enum DataType {
+    Settings(Settings),
+    SnapShot(SnapShot),
+}
+
+enum LoadType {
+    Settings,
+    Snapshot,
+}
+
 // -------- Structs --------
 // Index data for Settings struct
 struct IndexData {
@@ -255,8 +323,61 @@ struct IndexData {
     recording_length: usize,
 }
 
+// Snapshot struct
+#[derive(Savefile, Clone)]
+struct SnapShot {
+    frames: Vec<[i32; 6]>,
+}
+
+impl SnapShot {
+    fn new(frames: u128) -> SnapShot {
+        let mut frame_list = vec![];
+        for _ in 0..frames {
+            frame_list.push([0, 0, 0, 0, 0, 0]);
+        }
+
+        SnapShot {
+            frames: frame_list,
+        }
+    }
+
+    fn create(name: &str) -> Option<Error> {
+
+        match SnapShot::save(SnapShot::new(1), name) {
+            Some(error) => {
+                return Some(error);
+            },
+            None => {
+            }
+        };
+
+        None
+    }
+
+    fn update_ui(snapshot: SnapShot) -> ModelRc<ModelRc<i32>> {
+        let mut all_values = vec![];
+        for value in 0..snapshot.frames.len() {
+            let mut values = vec![];
+            
+            values.push(snapshot.frames[value][0]);
+            values.push(snapshot.frames[value][1]);
+            values.push(snapshot.frames[value][2]);
+            values.push(snapshot.frames[value][3]);
+            values.push(snapshot.frames[value][4]);
+            values.push(snapshot.frames[value][5]);
+
+            all_values.push(ModelRc::new(VecModel::from(values)));
+        }
+        ModelRc::new(VecModel::from(all_values))
+    }
+
+    fn save(snapshot: SnapShot, name: &str) -> Option<Error> {
+        save(DataType::SnapShot(snapshot), name)
+    }
+}
+
 // Preset data
-#[derive(Savefile)]
+#[derive(Savefile, Clone)]
 struct Preset {
     name: String,
     sub_bass: i32,
@@ -389,6 +510,7 @@ impl Recording {
         let mut fallback_error_occured = false;
         let mut empty_error_occured = false;
         let mut exists_error_occured = false;
+        let mut save_file_rename_error_occured = false;
         let mut rename_failed = (false, None);
 
         for name in 0..old.len() {
@@ -396,6 +518,9 @@ impl Recording {
                 if new.row_data(name).unwrap() == String::from("Default taken...") {
                     recording_list.push(Recording::from(old[name].name.clone(), Recording::parse(&old[name])));
                     fallback_error_occured = true;
+                } else if new.row_data(name).unwrap() == String::from("settings") {
+                    recording_list.push(Recording::from(old[name].name.clone(), Recording::parse(&old[name])));
+                    save_file_rename_error_occured = true;
                 } else if new.row_data(name).unwrap().is_empty() || new.row_data(name).unwrap() == String::from("") {
                     recording_list.push(Recording::from(old[name].name.clone(), Recording::parse(&old[name])));
                     empty_error_occured = true;
@@ -423,6 +548,8 @@ impl Recording {
             Err((recording_list, Error::EmptyError))
         } else if fallback_error_occured {
             Err((recording_list, Error::FallbackError))
+        } else if save_file_rename_error_occured {
+            Err((recording_list, Error::SaveFileRenameError))
         } else if rename_failed.0 {
             Err((recording_list, rename_failed.1.unwrap()))
         } else {
@@ -433,7 +560,7 @@ impl Recording {
 }
 
 // All settings data
-#[derive(Savefile)]
+#[derive(Savefile, Clone)]
 struct Settings {
     presets: Vec<Preset>,
     recordings: Vec<Recording>,
@@ -519,6 +646,22 @@ impl Settings {
                 }
             };
 
+            let mut snapshot_names = match File::search("./", "bin") {
+                Ok(File::Names(value)) => value,
+                Err(error) => {
+                    new.set_error_notification(Error::get_text(error));
+                    new.set_error_recieved(true);
+                    vec![String::from("Couldn't read files")]
+                }
+            };
+
+            for name in 0..snapshot_names.len() {
+                if snapshot_names[name] == "settings" {
+                    snapshot_names.remove(name);
+                    break;
+                }
+            }
+
             let mut updated_recordings = vec![];
 
             for name in 0..file_names.len() {
@@ -534,6 +677,32 @@ impl Settings {
                     }
                 } else {
                     updated_recordings.push(Recording::new(file_names[name].clone()));
+                }
+
+                // Syncs snapshots
+                if snapshot_names.len() > 0 {
+                    for file in 0..snapshot_names.len() {
+                        if file_names[name] != snapshot_names[file] {
+                            match SnapShot::create(&file_names[name]) {
+                                Some(error) => {
+                                    new.set_error_notification(Error::get_text(error));
+                                    new.set_error_recieved(true);
+                                },
+                                None => (),
+                            }
+                        } else {
+                            snapshot_names.remove(file);
+                            break;
+                        }
+                    }
+                } else {
+                    match SnapShot::create(&file_names[name]) {
+                        Some(error) => {
+                            new.set_error_notification(Error::get_text(error));
+                            new.set_error_recieved(true);
+                        },
+                        None => (),
+                    }
                 }
             }
 
@@ -595,7 +764,7 @@ impl Tracker {
                 new_name = String::from("Recording 1.wav");
             }
 
-            let mut writer = match WavWriter::create(new_name, audio_spec) {
+            let mut writer = match WavWriter::create(new_name.clone(), audio_spec) {
                 Ok(value) => value,
                 Err(_) => {
                     return Some(Error::WriteError);
@@ -657,17 +826,53 @@ impl Tracker {
 }
 
 // -------- Functions --------
-fn save(data: &Settings) -> Option<Error> {
-    match save_file("settings.bin", 0, data) {
-        Ok(_) => None,
-        Err(_) => Some(Error::SaveError),
+fn save(data: DataType, file: &str) -> Option<Error> {
+    match data {
+        DataType::Settings(value) => {
+            match save_file(format!("{}.bin", file), 0, &value) {
+                Ok(_) => {
+                    return None;
+                },
+                Err(_) => {
+                    return Some(Error::SaveError);
+                },
+            }
+        },
+        DataType::SnapShot(value) => {
+            match save_file(format!("{}.bin", file), 0, &value) {
+                Ok(_) => {
+                    return None;
+                },
+                Err(_) => {
+                    return Some(Error::SaveError);
+                },
+            }
+        },
     }
 }
 
-fn load() -> Result<Settings, Error> {
-    match load_file("settings.bin", 0) {
-        Ok(value) => Ok(value),
-        Err(_) => Err(Error::LoadError),
+fn load(file: &str, kind: LoadType) -> Result<DataType, Error> {
+    match kind {
+        LoadType::Settings => {
+            match load_file(format!("{}.bin", file), 0) {
+                Ok(value) => {
+                    return Ok(DataType::Settings(value));
+                },
+                Err(_) => {
+                    return Err(Error::LoadError);
+                },
+            }
+        },
+        LoadType::Snapshot => {
+            match load_file(format!("{}.bin", file), 0) {
+                Ok(value) => {
+                    return Ok(DataType::SnapShot(value));
+                },
+                Err(_) => {
+                    return Err(Error::LoadError);
+                },
+            }
+        },
     }
 }
 
@@ -677,11 +882,28 @@ fn main() -> Result<(), Box<dyn STDError>> {
     let mut setup_error = None;
 
     // Creates a variable that can be used across threads and move blocks and can be read from without locking
-    let tracker = Arc::new(Tracker::new(match load() {
-        Ok(value) => value,
+    let tracker = Arc::new(Tracker::new(match load("settings", LoadType::Settings) {
+        Ok(DataType::Settings(value)) => value,
+        Ok(DataType::SnapShot(_)) => {
+            setup_error = Some(Error::LoadError);
+            match save(DataType::Settings(Settings::new()), "settings") {
+                Some(error) => {
+                    setup_error = Some(error)
+                },
+                None => {
+                }
+            };
+            Settings::new()
+        }
         Err(error) => {
-            let _ = save(&Settings::new());
             setup_error = Some(error);
+            match save(DataType::Settings(Settings::new()), "settings") {
+                Some(error) => {
+                    setup_error = Some(error)
+                },
+                None => {
+                }
+            };
             Settings::new()
         }
     }));
@@ -695,8 +917,8 @@ fn main() -> Result<(), Box<dyn STDError>> {
             let ui = ui_handle.unwrap();
 
             match setup_error {
-                Some(value) => {
-                    ui.set_error_notification(Error::get_text(value));
+                Some(error) => {
+                    ui.set_error_notification(Error::get_text(error));
                     ui.set_error_recieved(true);
                     setup_error = None;
                 },
@@ -750,7 +972,14 @@ fn main() -> Result<(), Box<dyn STDError>> {
 
             // Aquires read access to the loaded data
             let settings = update_ref_count.read().unwrap();
-            let _ = save(&settings);
+            match save(DataType::Settings((*settings).clone()), "settings") {
+                Some(error) => {
+                    ui.set_error_notification(Error::get_text(error));
+                    ui.set_error_recieved(true);
+                },
+                None => {
+                }
+            }
         }
     });
 
@@ -762,6 +991,8 @@ fn main() -> Result<(), Box<dyn STDError>> {
 
         move || {
             let ui = ui_handle.unwrap();
+
+            // SnapShot::update_ui(
 
             if ui.get_recording() {
                 match tracker_ref_count.record() {
@@ -804,7 +1035,6 @@ fn main() -> Result<(), Box<dyn STDError>> {
         let ui_handle = ui.as_weak();
 
         let playing = tracker.playing.clone();
-        let playing2 = tracker.playing.clone();
 
         let settings = tracker.settings.clone();
 
@@ -813,12 +1043,43 @@ fn main() -> Result<(), Box<dyn STDError>> {
 
             let file = String::from(ui.get_recording_names().row_data(ui.get_current_recording() as usize).unwrap());
 
-            if ui.get_playing() {
+            if ui.get_playing() || ui.get_snap_playing() {
+
+                let values = settings.read().unwrap();
+                let mut snapshot = match load(&values.recordings[ui.get_current_recording() as usize].name, LoadType::Snapshot) {
+                    Ok(DataType::SnapShot(data)) => data,
+                    _ => {
+                        ui.set_error_notification(Error::get_text(Error::LoadError));
+                        ui.set_error_recieved(true);
+                        ui.set_playing(false);
+                        return;
+                    },
+                };
+
+                if snapshot.frames.len() <= 1 {
+                    let sound_data = match StaticSoundData::from_file(format!("{}.wav", file)) {
+                        Ok(value) => value,
+                        Err(_) => {
+                            ui.set_error_notification(Error::get_text(Error::LoadError));
+                            ui.set_error_recieved(true);
+                            ui.set_playing(false);
+                            return;
+                        }
+                    };
+
+                    let length = sound_data.duration();
+
+                    let frames = length.as_millis() / 50;
+                    snapshot = SnapShot::new(frames);
+                }
+
+                ui.set_frame_data(SnapShot::update_ui(snapshot.clone()));
+
             {
                 let mut should_play = playing.write().unwrap();
                 *should_play = true;
             }
-                match File::play(format!("{}.wav", file), settings.clone(), ui.get_current_recording() as usize, playing.clone()) {
+                match File::play(format!("{}.wav", file), settings.clone(), ui.get_current_recording() as usize, playing.clone(), ui.get_snapping(), ui.get_snap_playing(), snapshot) {
                     Some(error) => {
                         ui.set_error_notification(Error::get_text(error));
                         ui.set_error_recieved(true);
@@ -832,7 +1093,7 @@ fn main() -> Result<(), Box<dyn STDError>> {
                     },
                 }
             } else {
-                File::stop(playing2.clone());
+                File::stop(playing.clone());
             }
         }
     });
@@ -843,7 +1104,11 @@ fn main() -> Result<(), Box<dyn STDError>> {
         move || {
             let ui = ui_handle.unwrap();
  
-            Tracker::set_playing(playing_ref_count.clone(), ui.get_playing());
+            Tracker::set_playing(playing_ref_count.clone(), if ui.get_playing() || ui.get_snap_playing() {
+                true
+            } else {
+                false
+            });
         }
     });
 

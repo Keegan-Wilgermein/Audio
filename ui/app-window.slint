@@ -29,7 +29,10 @@ export component AppWindow inherits Window {
     out property <[int]> dial_values: [0, 0, 0, 0, 0, 0];
 
     in-out property <bool> playing: false;
+    private property <bool> button_playing: false;
     in-out property <bool> recording: false;
+    in-out property <bool> snapping: false;
+    in-out property <bool> snap_playing: false;
 
     private property <length> snap_by: 10px;
     private property <length> next_snap: snap_by;
@@ -45,6 +48,9 @@ export component AppWindow inherits Window {
     in-out property <bool> error-recieved: false;
 
     private property <bool> control_buttons: true;
+
+    in-out property <int> current_frame: 0;
+    in-out property <[[int]]> frame_data: [];
 
     // -------- Callbacks --------
     callback update();
@@ -109,7 +115,7 @@ export component AppWindow inherits Window {
     // Reenable the recording button after a short period
     Timer {
         interval: 1s;
-        running: !recorder.enabled;
+        running: !recorder.enabled && !snapping && !snap_playing && !playing;
 
         triggered => {
             recorder.enabled = true;
@@ -119,12 +125,48 @@ export component AppWindow inherits Window {
     // Periodically check for file changes
     Timer {
         interval: 5s;
-        running: !renaming_recording && !renaming_preset;
+        running: !renaming_recording && !renaming_preset && !recording && !button_playing && !snapping;
 
         triggered => {
             started = true;
             save();
             started = false;
+        }
+    }
+
+    // 50ms interval for updating frames
+    Timer {
+        interval: 50ms;
+        running: snap_playing || snapping || playing;
+
+        triggered => {
+            if snap_playing && !snapping {
+                dial_values[0] = frame_data[current_frame][0];
+                dial_values[1] = frame_data[current_frame][1];
+                dial_values[2] = frame_data[current_frame][2];
+                dial_values[3] = frame_data[current_frame][3];
+                dial_values[4] = frame_data[current_frame][4];
+                dial_values[5] = frame_data[current_frame][5];
+                if current_frame >= frame_data.length {
+                    dial_values[0] = recording_values[current_recording][0];
+                    dial_values[1] = recording_values[current_recording][1];
+                    dial_values[2] = recording_values[current_recording][2];
+                    dial_values[3] = recording_values[current_recording][3];
+                    dial_values[4] = recording_values[current_recording][4];
+                    dial_values[5] = recording_values[current_recording][5];
+                }
+            }
+            if current_frame >= frame_data.length {
+                snap_playing = false;
+                snapping = false;
+                playing = false;
+                button_playing = false;
+                control_buttons = true;
+                play_pause();
+                sync_playing();
+                current_frame = 0;
+            }
+            current_frame += 1;
         }
     }
 
@@ -168,10 +210,10 @@ export component AppWindow inherits Window {
                             alignment: center;
 
                             TouchArea {
-                                mouse-cursor: recording ? default : ew-resize;
+                                mouse-cursor: (!recording && !snap_playing) || snapping ? ew-resize : default;
 
-                                SwipeGestureHandler {
-                                    enabled: !recording;
+                                rotator := SwipeGestureHandler {
+                                    enabled: (!recording && !snap_playing) || snapping;
 
                                     Rectangle {
                                         border-width: 2px;
@@ -194,6 +236,11 @@ export component AppWindow inherits Window {
                                                 height: 40px;
                                                 width: 60px;
                                                 rotation-angle: dial_values[index2 + (index * 3)] * 20deg;
+                                                colorize: rotator.enabled ? #ffffff : #5d5d5d;
+
+                                                animate colorize {
+                                                    duration: 0.1s;
+                                                }
                                             }
                                         }
                                     }
@@ -286,7 +333,6 @@ export component AppWindow inherits Window {
                             clicked => {
                                 renaming_preset = !renaming_preset;
                                 rename_preset = true;
-                                control_buttons = true;
                             }
                         }
 
@@ -303,7 +349,6 @@ export component AppWindow inherits Window {
                             clicked => {
                                 deleting_preset = false;
                                 renaming_preset = !renaming_preset;
-                                control_buttons = false;
                             }
                         }
 
@@ -319,7 +364,6 @@ export component AppWindow inherits Window {
 
                             clicked => {
                                 deleting_preset = !deleting_preset;
-                                control_buttons = true;
                             }
                         }
 
@@ -336,7 +380,6 @@ export component AppWindow inherits Window {
                             clicked => {
                                 renaming_preset = false;
                                 deleting_preset = !deleting_preset;
-                                control_buttons = false;
                             }
                         }
                     }
@@ -355,7 +398,7 @@ export component AppWindow inherits Window {
 
                             TouchArea {
                                 mouse-cursor: pointer;
-                                enabled: !renaming_preset && !deleting_preset;
+                                enabled: (!renaming_preset && !deleting_preset && !snap_playing) || snapping;
 
                                 Rectangle {
                                     border-radius: 8px;
@@ -396,7 +439,7 @@ export component AppWindow inherits Window {
                             for preset[index] in preset_values:
                             TouchArea {
                                 mouse-cursor: pointer;
-                                enabled: !renaming_preset;
+                                enabled: (!renaming_preset && !snap_playing) || snapping;
 
                                 Rectangle {
                                     border-radius: 8px;
@@ -505,7 +548,7 @@ export component AppWindow inherits Window {
                         if !renaming_recording:
                         rename := TouchArea {
                             mouse-cursor: pointer;
-                            enabled: !recording;
+                            enabled: !recording && !snapping;
 
                             Image {
                                 source: @image-url("icons/rename.svg");
@@ -518,6 +561,8 @@ export component AppWindow inherits Window {
                                 deleting_recording = false;
                                 renaming_recording = !renaming_recording;
                                 playing = false;
+                                snap_playing = false;
+                                button_playing = false;
                                 control_buttons = false;
                                 sync_playing();
                             }
@@ -542,7 +587,7 @@ export component AppWindow inherits Window {
                         if !deleting_recording:
                         trash := TouchArea {
                             mouse-cursor: pointer;
-                            enabled: !recording;
+                            enabled: !recording && !snapping;
 
                             Image {
                                 source: @image-url("icons/trash.svg");
@@ -555,6 +600,8 @@ export component AppWindow inherits Window {
                                 deleting_recording = !deleting_recording;
                                 renaming_recording = false;
                                 playing = false;
+                                snap_playing = false;
+                                button_playing = false;
                                 control_buttons = false;
                                 sync_playing();
                             }
@@ -708,9 +755,73 @@ export component AppWindow inherits Window {
                         }
                     }
 
+                    snap_play := TouchArea {
+                        mouse-cursor: pointer;
+                        enabled: control_buttons && !playing;
+
+                        Rectangle {
+                            border-width: 1px;
+                            border-radius: 8px;
+                            border-color: #ffffff;
+                            background: #242424;
+                            drop-shadow-color: #101010;
+                            drop-shadow-blur: 8px;
+                            drop-shadow-offset-x: 4px;
+                            drop-shadow-offset-y: 4px;
+                            min-width: 100px;
+    
+                            HorizontalLayout {
+                                padding: 12px;
+                                alignment: center;
+    
+                                if snap_playing:
+                                Image {
+                                    source: @image-url("icons/pause.svg");
+                                    width: 20px;
+                                    height: 20px;
+                                    colorize: snap_play.enabled ? #479cec : #244c72;
+
+                                    animate colorize {
+                                        duration: 0.1s;
+                                    }
+                                }
+        
+                                if !snap_playing:
+                                Image {
+                                    source: @image-url("icons/play.svg");
+                                    width: 20px;
+                                    height: 20px;
+                                    colorize: snap_play.enabled ? #479cec : #244c72;
+
+                                    animate colorize {
+                                        duration: 0.1s;
+                                    }
+                                }
+                            }
+                        }
+
+                        clicked => {
+                            snap_playing = !snap_playing;
+                            if snap_playing {
+                                button_playing = true;
+                                current_frame = 0;
+                            } else {
+                                button_playing = false;
+                                dial_values[0] = recording_values[current_recording][0];
+                                dial_values[1] = recording_values[current_recording][1];
+                                dial_values[2] = recording_values[current_recording][2];
+                                dial_values[3] = recording_values[current_recording][3];
+                                dial_values[4] = recording_values[current_recording][4];
+                                dial_values[5] = recording_values[current_recording][5];
+                            }
+                            current_frame = 0;
+                            play_pause();
+                        }
+                    }
+
                     play := TouchArea {
                         mouse-cursor: pointer;
-                        enabled: control_buttons;
+                        enabled: control_buttons && !snap_playing;
 
                         Rectangle {
                             border-width: 1px;
@@ -732,7 +843,7 @@ export component AppWindow inherits Window {
                                     source: @image-url("icons/pause.svg");
                                     width: 20px;
                                     height: 20px;
-                                    colorize: !play.enabled ? #5d5d5d : #ffffff;
+                                    colorize: play.enabled ? #ec4747 : #912e2e;
 
                                     animate colorize {
                                         duration: 0.1s;
@@ -744,7 +855,7 @@ export component AppWindow inherits Window {
                                     source: @image-url("icons/play.svg");
                                     width: 20px;
                                     height: 20px;
-                                    colorize: !play.enabled ? #5d5d5d : #ffffff;
+                                    colorize: play.enabled ? #ec4747 : #912e2e;
 
                                     animate colorize {
                                         duration: 0.1s;
@@ -755,6 +866,11 @@ export component AppWindow inherits Window {
 
                         clicked => {
                             playing = !playing;
+                            if playing {
+                                button_playing = true;
+                            } else {
+                                button_playing = false;
+                            }
                             play_pause();
                         }
                     }
@@ -793,57 +909,126 @@ export component AppWindow inherits Window {
                     }
                 }
 
-                recorder := TouchArea {
-                    mouse-cursor: pointer;
+                HorizontalLayout {
+                    spacing: 12px;
 
-                    Rectangle {
-                        border-width: 1px;
-                        border-radius: 8px;
-                        border-color: #ffffff;
-                        background: #242424;
-                        drop-shadow-color: #101010;
-                        drop-shadow-blur: 8px;
-                        drop-shadow-offset-x: 6px;
-                        drop-shadow-offset-y: 6px;
+                    snapper := TouchArea {
+                        mouse-cursor: pointer;
+                        enabled: !recording && !button_playing;
     
-                        HorizontalLayout {
-                            padding: 12px;
-                            alignment: center;
-
-                            if recording:
-                            Image {
-                                source: @image-url("icons/stop-circle.svg");
-                                width: 20px;
-                                height: 20px;
-                                colorize: recorder.enabled ?  #ec4747 : #912e2e;
+                        Rectangle {
+                            border-width: 1px;
+                            border-radius: 8px;
+                            border-color: #ffffff;
+                            background: #242424;
+                            drop-shadow-color: #101010;
+                            drop-shadow-blur: 8px;
+                            drop-shadow-offset-x: 6px;
+                            drop-shadow-offset-y: 6px;
+        
+                            HorizontalLayout {
+                                padding: 12px;
+                                alignment: center;
+    
+                                if snapping:
+                                Image {
+                                    source: @image-url("icons/stop-circle.svg");
+                                    width: 20px;
+                                    height: 20px;
+                                    colorize: snapper.enabled ? #479cec : #244c72;
+                                }
+    
+                                if !snapping:
+                                Image {
+                                    source: @image-url("icons/circle.svg");
+                                    width: 20px;
+                                    height: 20px;
+                                    colorize: snapper.enabled ? #479cec : #244c72;
+                                }
                             }
-
-                            if !recording:
-                            Image {
-                                source: @image-url("icons/circle.svg");
-                                width: 20px;
-                                height: 20px;
-                                colorize: recorder.enabled ?  #ec4747 : #912e2e;
+                        }
+    
+                        clicked => {
+                            snapping = !snapping;
+                            if snapping {
+                                control_buttons = false;
+                                snap_playing = true;
+                                sync_playing();
+                                play_pause();
+                            } else {
+                                control_buttons = true;
+                                snap_playing = false;
+                                playing = false;
+                                sync_playing();
+                                play_pause();
+                                dial_values[0] = recording_values[current_recording][0];
+                                dial_values[1] = recording_values[current_recording][1];
+                                dial_values[2] = recording_values[current_recording][2];
+                                dial_values[3] = recording_values[current_recording][3];
+                                dial_values[4] = recording_values[current_recording][4];
+                                dial_values[5] = recording_values[current_recording][5];
                             }
+                            renaming_recording = false;
+                            deleting_recording = false;
+                            current_frame = 0;
                         }
                     }
 
-                    clicked => {
-                        recording = !recording;
-                        deleting_recording = false;
-                        renaming_recording = false;
-                        if recording {
-                            playing = false;
-                            control_buttons = false;
-                        } else {
-                            control_buttons = true;
-                            playing = false;
-                            new_recording = true;
+                    recorder := TouchArea {
+                        mouse-cursor: pointer;
+                        enabled: !snapping && !button_playing && !snap_playing;
+    
+                        Rectangle {
+                            border-width: 1px;
+                            border-radius: 8px;
+                            border-color: #ffffff;
+                            background: #242424;
+                            drop-shadow-color: #101010;
+                            drop-shadow-blur: 8px;
+                            drop-shadow-offset-x: 6px;
+                            drop-shadow-offset-y: 6px;
+        
+                            HorizontalLayout {
+                                padding: 12px;
+                                alignment: center;
+    
+                                if recording:
+                                Image {
+                                    source: @image-url("icons/stop-circle.svg");
+                                    width: 20px;
+                                    height: 20px;
+                                    colorize: recorder.enabled ? #ec4747 : #912e2e;
+                                }
+    
+                                if !recording:
+                                Image {
+                                    source: @image-url("icons/circle.svg");
+                                    width: 20px;
+                                    height: 20px;
+                                    colorize: recorder.enabled ? #ec4747 : #912e2e;
+                                }
+                            }
                         }
-                        self.enabled = false;
-                        record();
-                        new_recording = false;
-                        sync_playing();
+    
+                        clicked => {
+                            recording = !recording;
+                            deleting_recording = false;
+                            renaming_recording = false;
+                            if recording {
+                                playing = false;
+                                button_playing = false;
+                                control_buttons = false;
+                            } else {
+                                control_buttons = true;
+                                playing = false;
+                                button_playing = false;
+                                new_recording = true;
+                            }
+                            self.enabled = false;
+                            record();
+                            new_recording = false;
+                            sync_playing();
+                        }
                     }
                 }
             }
