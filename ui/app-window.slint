@@ -26,7 +26,8 @@ export component AppWindow inherits Window {
     in-out property <bool> new_recording: false;
     out property <bool> renamed_recording: false;
 
-    out property <[int]> dial_values: [0, 0, 0, 0, 0, 0];
+    in-out property <[int]> dial_values: [0, 0, 0, 0, 0, 0];
+    private property <[int]> backup: [0, 0, 0, 0, 0, 0];
 
     in-out property <bool> playing: false;
     private property <bool> button_playing: false;
@@ -51,6 +52,9 @@ export component AppWindow inherits Window {
 
     in-out property <int> current_frame: 0;
     in-out property <[[int]]> frame_data: [];
+    in-out property <[int]> data_frames: [];
+    in-out property <int> total_frames: 0;
+    private property <int> edit_frame: 0;
 
     // -------- Callbacks --------
     callback update();
@@ -134,29 +138,22 @@ export component AppWindow inherits Window {
         }
     }
 
-    // 50ms interval for updating frames
+    // 20ms interval for updating frames
     Timer {
-        interval: 50ms;
+        interval: 20ms;
         running: snap_playing || snapping || playing;
 
         triggered => {
-            if snap_playing && !snapping {
-                dial_values[0] = frame_data[current_frame][0];
-                dial_values[1] = frame_data[current_frame][1];
-                dial_values[2] = frame_data[current_frame][2];
-                dial_values[3] = frame_data[current_frame][3];
-                dial_values[4] = frame_data[current_frame][4];
-                dial_values[5] = frame_data[current_frame][5];
-                if current_frame >= frame_data.length {
-                    dial_values[0] = recording_values[current_recording][0];
-                    dial_values[1] = recording_values[current_recording][1];
-                    dial_values[2] = recording_values[current_recording][2];
-                    dial_values[3] = recording_values[current_recording][3];
-                    dial_values[4] = recording_values[current_recording][4];
-                    dial_values[5] = recording_values[current_recording][5];
-                }
+            if snap_playing && !snapping && current_frame == data_frames[edit_frame] {
+                dial_values[0] = frame_data[edit_frame][0];
+                dial_values[1] = frame_data[edit_frame][1];
+                dial_values[2] = frame_data[edit_frame][2];
+                dial_values[3] = frame_data[edit_frame][3];
+                dial_values[4] = frame_data[edit_frame][4];
+                dial_values[5] = frame_data[edit_frame][5];
+                edit_frame += 1;
             }
-            if current_frame >= frame_data.length {
+            if current_frame >= total_frames {
                 snap_playing = false;
                 snapping = false;
                 playing = false;
@@ -165,6 +162,13 @@ export component AppWindow inherits Window {
                 play_pause();
                 sync_playing();
                 current_frame = 0;
+                edit_frame = 0;
+                dial_values[0] = recording_values[current_recording][0];
+                dial_values[1] = recording_values[current_recording][1];
+                dial_values[2] = recording_values[current_recording][2];
+                dial_values[3] = recording_values[current_recording][3];
+                dial_values[4] = recording_values[current_recording][4];
+                dial_values[5] = recording_values[current_recording][5];
             }
             current_frame += 1;
         }
@@ -664,7 +668,7 @@ export component AppWindow inherits Window {
                                         }
                 
                                         Text {
-                                            text: "\{recording[0]}  \{recording[1]}  \{recording[2]}  \{recording[3]}  \{recording[4]}  \{recording[5]}";
+                                            text: snapping ? "\{backup[0]}  \{backup[1]}  \{backup[2]}  \{backup[3]}  \{backup[4]}  \{backup[5]}" : "\{recording[0]}  \{recording[1]}  \{recording[2]}  \{recording[3]}  \{recording[4]}  \{recording[5]}";
                                             overflow: elide;
                                             vertical-alignment: center;
                                             font-size: renaming_recording ? 1px : 12px;
@@ -804,7 +808,6 @@ export component AppWindow inherits Window {
                             snap_playing = !snap_playing;
                             if snap_playing {
                                 button_playing = true;
-                                current_frame = 0;
                             } else {
                                 button_playing = false;
                                 dial_values[0] = recording_values[current_recording][0];
@@ -815,6 +818,7 @@ export component AppWindow inherits Window {
                                 dial_values[5] = recording_values[current_recording][5];
                             }
                             current_frame = 0;
+                            edit_frame = 0;
                             play_pause();
                         }
                     }
@@ -951,22 +955,22 @@ export component AppWindow inherits Window {
                         clicked => {
                             snapping = !snapping;
                             if snapping {
+                                backup = recording_values[current_recording];
                                 control_buttons = false;
                                 snap_playing = true;
                                 sync_playing();
                                 play_pause();
                             } else {
+                                dial_values = backup;
+                                recording_values[current_recording] = backup;
+                                dials_edited = true;
+                                save();
+                                dials_edited = false;
                                 control_buttons = true;
                                 snap_playing = false;
                                 playing = false;
                                 sync_playing();
                                 play_pause();
-                                dial_values[0] = recording_values[current_recording][0];
-                                dial_values[1] = recording_values[current_recording][1];
-                                dial_values[2] = recording_values[current_recording][2];
-                                dial_values[3] = recording_values[current_recording][3];
-                                dial_values[4] = recording_values[current_recording][4];
-                                dial_values[5] = recording_values[current_recording][5];
                             }
                             renaming_recording = false;
                             deleting_recording = false;
@@ -1027,7 +1031,9 @@ export component AppWindow inherits Window {
                             self.enabled = false;
                             record();
                             new_recording = false;
-                            sync_playing();
+                            if playing || snap_playing {
+                                sync_playing();
+                            }
                         }
                     }
                 }

@@ -8,7 +8,7 @@ use savefile_derive::Savefile;
 use slint::{Model, ModelRc, SharedString, ToSharedString, VecModel};
 use qruhear::{RUHear, RUBuffers, rucallback};
 use hound::{WavWriter, SampleFormat, WavSpec};
-use kira::{effect::{eq_filter::{EqFilterBuilder, EqFilterKind}, panning_control::PanningControlBuilder}, sound::static_sound::StaticSoundData, track::TrackBuilder, AudioManager, AudioManagerSettings, DefaultBackend, Easing, StartTime, Tween};
+use kira::{effect::{eq_filter::{EqFilterBuilder, EqFilterKind}, panning_control::PanningControlBuilder}, sound::static_sound::StaticSoundData, track::TrackBuilder, AudioManager, AudioManagerSettings, DefaultBackend, Tween};
 
 slint::include_modules!();
 
@@ -206,39 +206,47 @@ impl File {
                 }
             };
 
+
             let start = Instant::now();
-            let mut frame = 0;
+            let mut frame: usize = 0;
+            let mut previous_frame = [0, 0, 0, 0, 0, 0];
+            let mut edited_frame: usize = 0;
             while start.elapsed() < length {
                 let should_play = paused.read().unwrap();
                 if *should_play {
                     if snap_playing && !snapping {
-
-                        sub_bass_handle.set_gain(if snapshot.frames[frame][0] == -7 {
-                            -60.0
-                        } else {
-                            snapshot.frames[frame][0] as f32 * 2.0
-                        }, Tween { start_time: StartTime::Immediate, duration: Duration::from_secs(0), easing: Easing::Linear });
-                        bass_handle.set_gain(if snapshot.frames[frame][1] == -7 {
-                            -60.0
-                        } else {
-                            snapshot.frames[frame][1] as f32 * 2.0
-                        }, Tween { start_time: StartTime::Immediate, duration: Duration::from_secs(0), easing: Easing::Linear });
-                        mids_handle.set_gain(if snapshot.frames[frame][2] == -7 {
-                            -60.0
-                        } else {
-                            snapshot.frames[frame][2] as f32 * 2.0
-                        }, Tween { start_time: StartTime::Immediate, duration: Duration::from_secs(0), easing: Easing::Linear });
-                        vocals_handle.set_gain(if snapshot.frames[frame][3] == -7 {
-                            -60.0
-                        } else {
-                            snapshot.frames[frame][3] as f32 * 2.0
-                        }, Tween { start_time: StartTime::Immediate, duration: Duration::from_secs(0), easing: Easing::Linear });
-                        treble_handle.set_gain(if snapshot.frames[frame][4] == -7 {
-                            -60.0
-                        } else {
-                            snapshot.frames[frame][4] as f32 * 2.0
-                        }, Tween { start_time: StartTime::Immediate, duration: Duration::from_secs(0), easing: Easing::Linear });
-                        panning_handle.set_panning(snapshot.frames[frame][5] as f32 * 0.15, Tween::default());
+                        if edited_frame < snapshot.frames.len() {
+                            if frame == snapshot.frames[edited_frame].1 as usize {
+                                sub_bass_handle.set_gain(if snapshot.frames[edited_frame].0[0] == -7 {
+                                    -60.0
+                                } else {
+                                    snapshot.frames[edited_frame].0[0] as f32 * 2.0
+                                }, Tween::default());
+                                bass_handle.set_gain(if snapshot.frames[edited_frame].0[1] == -7 {
+                                    -60.0
+                                } else {
+                                    snapshot.frames[edited_frame].0[1] as f32 * 2.0
+                                }, Tween::default());
+                                mids_handle.set_gain(if snapshot.frames[edited_frame].0[2] == -7 {
+                                    -60.0
+                                } else {
+                                    snapshot.frames[edited_frame].0[2] as f32 * 2.0
+                                }, Tween::default());
+                                vocals_handle.set_gain(if snapshot.frames[edited_frame].0[3] == -7 {
+                                    -60.0
+                                } else {
+                                    snapshot.frames[edited_frame].0[3] as f32 * 2.0
+                                }, Tween::default());
+                                treble_handle.set_gain(if snapshot.frames[edited_frame].0[4] == -7 {
+                                    -60.0
+                                } else {
+                                    snapshot.frames[edited_frame].0[4] as f32 * 2.0
+                                }, Tween::default());
+                                panning_handle.set_panning(snapshot.frames[edited_frame].0[5] as f32 * 0.15, Tween::default());
+    
+                                edited_frame += 1;
+                            }
+                        }
 
                         frame += 1;
 
@@ -246,8 +254,11 @@ impl File {
                         let value = values.read().unwrap();
 
                         if snapping {
-                            snapshot.frames[frame] = Recording::parse(&value.recordings[selected_recording]);
-                            frame += 1;
+                            if SnapShot::edited(previous_frame, Recording::parse(&value.recordings[selected_recording])) {
+                                snapshot.frames.push((Recording::parse(&value.recordings[selected_recording]), frame as i32));
+                                edited_frame += 1;
+                                previous_frame = snapshot.frames[edited_frame].0;
+                            }
                         }
                         
                         sub_bass_handle.set_gain(if value.recordings[selected_recording].sub_bass == -7 {
@@ -276,19 +287,22 @@ impl File {
                             value.recordings[selected_recording].treble as f32 * 2.0
                         }, Tween::default());
                         panning_handle.set_panning(value.recordings[selected_recording].pan as f32 * 0.15, Tween::default());
-    
                         
+                        frame += 1;
                         drop(value);
                     }
                     
                     drop(should_play);
-                    thread::sleep(Duration::from_millis(50));
+                    thread::sleep(Duration::from_millis(20));
                 } else {
                     break;
                 }
             }
             
-            SnapShot::save(snapshot, &File::truncate(file));
+            if snapping {
+                snapshot.frames.remove(0);
+                SnapShot::save(snapshot, &File::truncate(file));
+            }
 
             None
         }) {
@@ -326,49 +340,75 @@ struct IndexData {
 // Snapshot struct
 #[derive(Savefile, Clone)]
 struct SnapShot {
-    frames: Vec<[i32; 6]>,
+    frames: Vec<([i32; 6], i32)>,
+    total_frames: i32,
 }
 
 impl SnapShot {
-    fn new(frames: u128) -> SnapShot {
-        let mut frame_list = vec![];
-        for _ in 0..frames {
-            frame_list.push([0, 0, 0, 0, 0, 0]);
-        }
-
-        SnapShot {
-            frames: frame_list,
-        }
-    }
-
     fn create(name: &str) -> Option<Error> {
-
-        match SnapShot::save(SnapShot::new(1), name) {
+        
+        match SnapShot::save(SnapShot { frames: vec![([0, 0, 0, 0, 0, 0], 0)], total_frames: 1 }, name) {
             Some(error) => {
                 return Some(error);
             },
             None => {
             }
         };
-
+        
         None
     }
+    
+    fn from(frames: u128, change_on_frame: Vec<i32>) -> SnapShot {
+        let mut list = vec![];
 
-    fn update_ui(snapshot: SnapShot) -> ModelRc<ModelRc<i32>> {
+        for frame in 0..frames {
+            for edit in 0..change_on_frame.len() {
+                if frame as i32 == change_on_frame[edit] {
+                    list.push(([0, 0, 0, 0, 0, 0], change_on_frame[edit]));
+                    break;
+                }
+            }
+        }
+
+        SnapShot {
+            frames: list,
+            total_frames: frames as i32,
+        }
+    }
+
+    fn edited(previous: [i32; 6], next: [i32; 6]) -> bool {
+        for number in 0..6 {
+            if previous[number] == next[number] {
+                continue;
+            } else {
+                return true;
+            }
+        }
+
+        false
+    }
+
+    fn update_ui(snapshot: SnapShot) -> (ModelRc<ModelRc<i32>>, ModelRc<i32>) {
         let mut all_values = vec![];
         for value in 0..snapshot.frames.len() {
             let mut values = vec![];
             
-            values.push(snapshot.frames[value][0]);
-            values.push(snapshot.frames[value][1]);
-            values.push(snapshot.frames[value][2]);
-            values.push(snapshot.frames[value][3]);
-            values.push(snapshot.frames[value][4]);
-            values.push(snapshot.frames[value][5]);
+            values.push(snapshot.frames[value].0[0]);
+            values.push(snapshot.frames[value].0[1]);
+            values.push(snapshot.frames[value].0[2]);
+            values.push(snapshot.frames[value].0[3]);
+            values.push(snapshot.frames[value].0[4]);
+            values.push(snapshot.frames[value].0[5]);
 
             all_values.push(ModelRc::new(VecModel::from(values)));
         }
-        ModelRc::new(VecModel::from(all_values))
+
+        let mut frames = vec![];
+        for frame in 0..snapshot.frames.len() {
+            frames.push(snapshot.frames[frame].1);
+        }
+
+        (ModelRc::new(VecModel::from(all_values)), ModelRc::new(VecModel::from(frames)))
     }
 
     fn save(snapshot: SnapShot, name: &str) -> Option<Error> {
@@ -473,6 +513,19 @@ impl Recording {
         list[3] = recording.vocals;
         list[4] = recording.treble;
         list[5] = recording.pan;
+
+        list
+    }
+
+    fn parse_vec(recording: &Recording) -> Vec<i32> {
+        let mut list = vec![];
+
+        list.push(recording.sub_bass);
+        list.push(recording.bass);
+        list.push(recording.mids);
+        list.push(recording.vocals);
+        list.push(recording.treble);
+        list.push(recording.pan);
 
         list
     }
@@ -1056,7 +1109,7 @@ fn main() -> Result<(), Box<dyn STDError>> {
                     },
                 };
 
-                if snapshot.frames.len() <= 1 {
+                if snapshot.frames.len() <= 1 || ui.get_snapping() {
                     let sound_data = match StaticSoundData::from_file(format!("{}.wav", file)) {
                         Ok(value) => value,
                         Err(_) => {
@@ -1069,11 +1122,13 @@ fn main() -> Result<(), Box<dyn STDError>> {
 
                     let length = sound_data.duration();
 
-                    let frames = length.as_millis() / 50;
-                    snapshot = SnapShot::new(frames);
+                    let frames = length.as_millis() / 20;
+                    snapshot = SnapShot::from(frames, vec![0]);
                 }
 
-                ui.set_frame_data(SnapShot::update_ui(snapshot.clone()));
+                ui.set_frame_data(SnapShot::update_ui(snapshot.clone()).0);
+                ui.set_data_frames(SnapShot::update_ui(snapshot.clone()).1);
+                ui.set_total_frames(snapshot.total_frames);
 
             {
                 let mut should_play = playing.write().unwrap();
@@ -1101,12 +1156,17 @@ fn main() -> Result<(), Box<dyn STDError>> {
     ui.on_sync_playing({
         let ui_handle = ui.as_weak();
         let playing_ref_count = tracker.playing.clone();
+        let settings_ref_count = tracker.settings.clone();
         move || {
             let ui = ui_handle.unwrap();
  
             Tracker::set_playing(playing_ref_count.clone(), if ui.get_playing() || ui.get_snap_playing() {
                 true
             } else {
+                let settings = settings_ref_count.read().unwrap();
+                if settings.recordings.len() > 0 {
+                    ui.set_dial_values(ModelRc::new(VecModel::from(Recording::parse_vec(&settings.recordings[ui.get_current_recording() as usize]))));
+                }
                 false
             });
         }
