@@ -678,7 +678,6 @@ impl Settings {
                     error.0
                 },
             };
-            self.recordings.sort_by_key(|recording| recording.name.clone());
         }
 
         // Sync recording data with any changes that might have been made while the app was closed
@@ -758,7 +757,7 @@ impl Settings {
     }
 }
 
-// Keeps track of the settings and the recording thread
+// Keeps track of the settings, the recording thread, whether recordings are being played, and the values of the dials during a set of audio frames
 struct Tracker {
     settings: Arc<RwLock<Settings>>,
     recorder: Arc<Mutex<Option<Thread>>>,
