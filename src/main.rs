@@ -1204,13 +1204,6 @@ fn main() -> Result<(), Box<dyn STDError>> {
         }
     });
 
-    // ui.on_name({
-    //     let ui_handle = ui.as_weak();
-    //     move || {
-    //         let ui = ui_handle.unwrap();
-    //     }
-    // });
-
     ui.run()?;
 
     Ok(())
