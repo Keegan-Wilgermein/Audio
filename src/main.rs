@@ -8,7 +8,7 @@ use savefile_derive::Savefile;
 use slint::{Model, ModelRc, SharedString, ToSharedString, VecModel};
 use qruhear::{RUHear, RUBuffers, rucallback};
 use hound::{WavWriter, SampleFormat, WavSpec};
-use kira::{effect::{eq_filter::{EqFilterBuilder, EqFilterKind}, panning_control::PanningControlBuilder}, sound::static_sound::StaticSoundData, track::TrackBuilder, AudioManager, AudioManagerSettings, DefaultBackend, Tween};
+use kira::{effect::{eq_filter::{EqFilterBuilder, EqFilterKind}, panning_control::PanningControlBuilder}, sound::static_sound::StaticSoundData, track::{TrackBuilder}, AudioManager, AudioManagerSettings, DefaultBackend, Tween};
 
 slint::include_modules!();
 
@@ -157,7 +157,7 @@ impl File {
         check
     }
 
-    fn play(file: String, values: Arc<RwLock<Settings>>, selected_recording: usize, paused: Arc<RwLock<bool>>, snapping: bool, snap_playing: bool, mut snapshot: SnapShot) -> Option<Error> {
+    fn play(file: String, values: Arc<RwLock<Settings>>, selected_recording: usize, paused: Arc<RwLock<bool>>, snapping: bool, snap_playing: bool, mut snapshot: SnapShot, frame_updates: Arc<RwLock<[i32; 6]>>) -> Option<Error> {
 
         let state = match thread::Builder::new().name(String::from("Player")).spawn(move || {
 
@@ -217,6 +217,8 @@ impl File {
                     if snap_playing && !snapping {
                         if edited_frame < snapshot.frames.len() {
                             if frame == snapshot.frames[edited_frame].1 as usize {
+                                let mut dial_values = frame_updates.write().unwrap();
+                                *dial_values = snapshot.frames[edited_frame].0;
                                 sub_bass_handle.set_gain(if snapshot.frames[edited_frame].0[0] == -7 {
                                     -60.0
                                 } else {
@@ -298,6 +300,9 @@ impl File {
                     break;
                 }
             }
+
+            let mut should_play = paused.write().unwrap();
+            *should_play = false;
             
             if snapping {
                 snapshot.frames.remove(0);
@@ -341,13 +346,12 @@ struct IndexData {
 #[derive(Savefile, Clone)]
 struct SnapShot {
     frames: Vec<([i32; 6], i32)>,
-    total_frames: i32,
 }
 
 impl SnapShot {
     fn create(name: &str) -> Option<Error> {
         
-        match SnapShot::save(SnapShot { frames: vec![([0, 0, 0, 0, 0, 0], 0)], total_frames: 1 }, name) {
+        match SnapShot::save(SnapShot { frames: vec![([0, 0, 0, 0, 0, 0], 0)] }, name) {
             Some(error) => {
                 return Some(error);
             },
@@ -372,7 +376,6 @@ impl SnapShot {
 
         SnapShot {
             frames: list,
-            total_frames: frames as i32,
         }
     }
 
@@ -386,29 +389,6 @@ impl SnapShot {
         }
 
         false
-    }
-
-    fn update_ui(snapshot: SnapShot) -> (ModelRc<ModelRc<i32>>, ModelRc<i32>) {
-        let mut all_values = vec![];
-        for value in 0..snapshot.frames.len() {
-            let mut values = vec![];
-            
-            values.push(snapshot.frames[value].0[0]);
-            values.push(snapshot.frames[value].0[1]);
-            values.push(snapshot.frames[value].0[2]);
-            values.push(snapshot.frames[value].0[3]);
-            values.push(snapshot.frames[value].0[4]);
-            values.push(snapshot.frames[value].0[5]);
-
-            all_values.push(ModelRc::new(VecModel::from(values)));
-        }
-
-        let mut frames = vec![];
-        for frame in 0..snapshot.frames.len() {
-            frames.push(snapshot.frames[frame].1);
-        }
-
-        (ModelRc::new(VecModel::from(all_values)), ModelRc::new(VecModel::from(frames)))
     }
 
     fn save(snapshot: SnapShot, name: &str) -> Option<Error> {
@@ -530,6 +510,19 @@ impl Recording {
         list
     }
 
+    fn parse_vec_from_list(list: [i32; 6]) -> Vec<i32> {
+        let mut new = vec![];
+
+        new.push(list[0]);
+        new.push(list[1]);
+        new.push(list[2]);
+        new.push(list[3]);
+        new.push(list[4]);
+        new.push(list[5]);
+
+        new
+    }
+
     fn send_names(list: &Vec<Recording>) -> ModelRc<SharedString> {
         let mut new_list = vec![];
 
@@ -568,7 +561,7 @@ impl Recording {
 
         for name in 0..old.len() {
             if new.row_data(name).unwrap() != old[name].name {
-                if new.row_data(name).unwrap() == String::from("Default taken...") {
+                if new.row_data(name).unwrap().contains(&String::from("Default taken...")) {
                     recording_list.push(Recording::from(old[name].name.clone(), Recording::parse(&old[name])));
                     fallback_error_occured = true;
                 } else if new.row_data(name).unwrap() == String::from("settings") {
@@ -770,6 +763,7 @@ struct Tracker {
     settings: Arc<RwLock<Settings>>,
     recorder: Arc<Mutex<Option<Thread>>>,
     playing: Arc<RwLock<bool>>,
+    snapshot_frame_values: Arc<RwLock<[i32; 6]>>
 }
 
 impl Tracker {
@@ -778,6 +772,7 @@ impl Tracker {
             settings: Arc::new(RwLock::new(settings)),
             recorder: Arc::new(Mutex::new(None)),
             playing: Arc::new(RwLock::new(false)),
+            snapshot_frame_values: Arc::new(RwLock::new([0, 0, 0, 0, 0, 0])),
         }
     }
 
@@ -799,6 +794,13 @@ impl Tracker {
                 Err(_) => vec![String::from("Couldn't read files")],
             };
 
+            let mut fallbacks = 0;
+            for name in &taken_names {
+                if (*name).contains(&String::from("Default taken...")) {
+                    fallbacks += 1;
+                }
+            }
+
             let recording_amount = taken_names.len();
 
             let mut new_name = String::new();
@@ -809,7 +811,7 @@ impl Tracker {
                     if potential != taken_names[item] {
                         new_name = format!("{}.wav", potential);
                     } else {
-                        new_name = String::from("Default taken....wav");
+                        new_name = format!("Default taken... {}.wav", fallbacks + 1);
                         break;
                     }
                 }
@@ -1091,6 +1093,8 @@ fn main() -> Result<(), Box<dyn STDError>> {
 
         let settings = tracker.settings.clone();
 
+        let dials = tracker.snapshot_frame_values.clone();
+
         move || {
             let ui = ui_handle.unwrap();
 
@@ -1126,15 +1130,11 @@ fn main() -> Result<(), Box<dyn STDError>> {
                     snapshot = SnapShot::from(frames, vec![0]);
                 }
 
-                ui.set_frame_data(SnapShot::update_ui(snapshot.clone()).0);
-                ui.set_data_frames(SnapShot::update_ui(snapshot.clone()).1);
-                ui.set_total_frames(snapshot.total_frames);
-
             {
                 let mut should_play = playing.write().unwrap();
                 *should_play = true;
             }
-                match File::play(format!("{}.wav", file), settings.clone(), ui.get_current_recording() as usize, playing.clone(), ui.get_snapping(), ui.get_snap_playing(), snapshot) {
+                match File::play(format!("{}.wav", file), settings.clone(), ui.get_current_recording() as usize, playing.clone(), ui.get_snapping(), ui.get_snap_playing(), snapshot, dials.clone()) {
                     Some(error) => {
                         ui.set_error_notification(Error::get_text(error));
                         ui.set_error_recieved(true);
@@ -1149,11 +1149,12 @@ fn main() -> Result<(), Box<dyn STDError>> {
                 }
             } else {
                 File::stop(playing.clone());
+                ui.set_can_skip(true);
             }
         }
     });
 
-    ui.on_sync_playing({
+    ui.on_sync_playing_with_ui({
         let ui_handle = ui.as_weak();
         let playing_ref_count = tracker.playing.clone();
         let settings_ref_count = tracker.settings.clone();
@@ -1169,6 +1170,38 @@ fn main() -> Result<(), Box<dyn STDError>> {
                 }
                 false
             });
+        }
+    });
+
+    ui.on_sync_playing_with_backend({
+        let ui_handle = ui.as_weak();
+
+        let playing = tracker.playing.clone();
+
+        move || {
+            let ui = ui_handle.unwrap();
+
+            let is_playing = *playing.read().unwrap();
+
+            if !is_playing {
+                ui.set_playing(false);
+                ui.set_snap_playing(false);
+                ui.set_snapping(false);
+                ui.set_backend_synced(true);
+            }
+        }
+    });
+
+    ui.on_snapshot_dial_update({
+        let ui_handle = ui.as_weak();
+
+        let dials = tracker.snapshot_frame_values.clone();
+        move || {
+            let ui = ui_handle.unwrap();
+
+            let dial_values = dials.read().unwrap();
+
+            ui.set_dial_values(ModelRc::new(VecModel::from(Recording::parse_vec_from_list(*dial_values))));
         }
     });
 
