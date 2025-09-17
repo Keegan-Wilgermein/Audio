@@ -4,7 +4,7 @@ System wide audio recording, editing, and playback
 ## How to use
 ### Recording Audio
 - Click the red circle icon to start and stop recording
-### Red Playback
+### Audio Playback
 - Select a recording to play from the list
 - Click the red play button to start playback
 - Click the red pause button to stop playback
@@ -15,7 +15,7 @@ Recordings can't be played while a recording is in progress
 
 ### Recording inputs
 - Click the blue circle icon to start and stop recording the edits you make to the dials
-### Blue Playback
+### Input Playback
 - Select a recording to play from the list
 - Click the blue play button to start playing back your captured inputs
 - Click the blue pause button to stop playback
