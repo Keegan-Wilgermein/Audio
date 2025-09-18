@@ -206,7 +206,6 @@ impl File {
                 }
             };
 
-
             let start = Instant::now();
             let mut frame: usize = 0;
             let mut previous_frame = [0, 0, 0, 0, 0, 0];
@@ -786,7 +785,7 @@ impl Tracker {
             *current_thread.recorder.lock().unwrap() = Some(thread::current());
 
             let audio_spec = WavSpec {
-                channels: 1,
+                channels: 2,
                 sample_rate: 48000,
                 bits_per_sample: 32,
                 sample_format: SampleFormat::Float,
@@ -828,10 +827,44 @@ impl Tracker {
                     return Some(Error::WriteError);
                 }
             };
+
+            let mut initial_silence = true;
+            let mut told = false;
             
             let record_edit = move |data: RUBuffers| {
-                for sample in &data[1] {
-                    writer.write_sample(*sample).unwrap();
+                let mut interleaved = vec![];
+
+                let channel1_len = data[0].len();
+                let channel2_len = data[1].len();
+
+                for sample in 0..(if channel1_len > channel2_len {
+                    channel2_len
+                } else {
+                    channel1_len
+                }) {
+                    if initial_silence {
+                        if !told {
+                            told = true;
+                        }
+                        if data[0][sample] != 0.0 || data[1][sample] != 0.0 {
+                            initial_silence = false;
+                            continue;
+                        } else {
+                            continue;
+                        }
+                    } else {
+                        if told {
+                            told = false;
+                        }
+                        interleaved.push(data[0][sample]);
+                        interleaved.push(data[1][sample]);
+                    }
+                }
+
+                if !initial_silence {
+                    for sample in &interleaved {
+                        writer.write_sample(*sample).unwrap();
+                    }
                 }
             };
             
