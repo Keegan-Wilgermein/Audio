@@ -257,8 +257,8 @@ impl File {
                         if snapping {
                             if SnapShot::edited(previous_frame, Recording::parse(&value.recordings[selected_recording])) {
                                 snapshot.frames.push((Recording::parse(&value.recordings[selected_recording]), frame as i32));
-                                edited_frame += 1;
                                 previous_frame = snapshot.frames[edited_frame].0;
+                                edited_frame += 1;
                             }
                         }
                         
@@ -359,6 +359,12 @@ impl SnapShot {
         };
         
         None
+    }
+
+    fn new() -> SnapShot {
+        SnapShot {
+            frames: vec![([0, 0, 0, 0, 0, 0], 0)],
+        }
     }
 
     fn edited(previous: [i32; 6], next: [i32; 6]) -> bool {
@@ -1115,20 +1121,30 @@ fn main() -> Result<(), Box<dyn STDError>> {
             if ui.get_playing() || ui.get_snap_playing() {
 
                 let values = settings.read().unwrap();
-                let snapshot = match load(&values.recordings[ui.get_current_recording() as usize].name, LoadType::Snapshot) {
-                    Ok(DataType::SnapShot(data)) => data,
-                    _ => {
-                        ui.set_error_notification(Error::get_text(Error::LoadError));
-                        ui.set_error_recieved(true);
-                        ui.set_playing(false);
-                        return;
-                    },
+                let snapshot = if ui.get_snapping() {
+                    SnapShot::new()
+                } else {
+                    match load(&values.recordings[ui.get_current_recording() as usize].name, LoadType::Snapshot) {
+                        Ok(DataType::SnapShot(data)) => data,
+                        _ => {
+                            ui.set_error_notification(Error::get_text(Error::LoadError));
+                            ui.set_error_recieved(true);
+                            ui.set_playing(false);
+                            return;
+                        },
+                    }
                 };
 
-            {
-                let mut should_play = playing.write().unwrap();
-                *should_play = true;
-            }
+                {
+                    let mut should_play = playing.write().unwrap();
+                    *should_play = true;
+                }
+                {
+                    let values = settings.read().unwrap();
+                    let mut dial_values = dials.write().unwrap();
+                    *dial_values = Recording::parse(&values.recordings[ui.get_current_recording() as usize]);
+                }
+
                 match File::play(format!("{}.wav", file), settings.clone(), ui.get_current_recording() as usize, playing.clone(), ui.get_snapping(), ui.get_snap_playing(), snapshot, dials.clone()) {
                     Some(error) => {
                         ui.set_error_notification(Error::get_text(error));
@@ -1179,9 +1195,6 @@ fn main() -> Result<(), Box<dyn STDError>> {
             let is_playing = *playing.read().unwrap();
 
             if !is_playing {
-                ui.set_playing(false);
-                ui.set_snap_playing(false);
-                ui.set_snapping(false);
                 ui.set_backend_synced(true);
             }
         }

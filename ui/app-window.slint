@@ -63,6 +63,7 @@ export component AppWindow inherits Window {
 
     private property <bool> short: false;
     private property <bool> short_snap: false;
+    in-out property <bool> can_play: true;
 
     // -------- Callbacks --------
     callback update();
@@ -126,7 +127,7 @@ export component AppWindow inherits Window {
         }
     }
 
-    // Reenable the recording button after a short period
+    // Re-enable the recording button after a short period
     Timer {
         interval: 1s;
         running: short;
@@ -143,6 +144,16 @@ export component AppWindow inherits Window {
 
         triggered => {
             short_snap = false;
+        }
+    }
+
+    // Re-enable the play buttons after a short period
+    Timer {
+        interval: 0.5s;
+        running: !can_play;
+
+        triggered => {
+            can_play = true;
         }
     }
 
@@ -169,15 +180,25 @@ export component AppWindow inherits Window {
             }
             sync_playing_with_backend();
             if backend_synced {
-                button_playing = false;
                 control_buttons = true;
                 backend_synced = false;
-                dial_values[0] = recording_values[current_recording][0];
-                dial_values[1] = recording_values[current_recording][1];
-                dial_values[2] = recording_values[current_recording][2];
-                dial_values[3] = recording_values[current_recording][3];
-                dial_values[4] = recording_values[current_recording][4];
-                dial_values[5] = recording_values[current_recording][5];
+                if playing {
+                    playing = false;
+                }
+                if snap_playing || snapping {
+                    snapping = false;
+                    snap_playing = false;
+                    dial_values[0] = backup[0];
+                    dial_values[1] = backup[1];
+                    dial_values[2] = backup[2];
+                    dial_values[3] = backup[3];
+                    dial_values[4] = backup[4];
+                    dial_values[5] = backup[5];
+                    dials_edited = true;
+                    save();
+                    dials_edited = false;
+                }
+                button_playing = false;
             }
         }
     }
@@ -853,7 +874,7 @@ export component AppWindow inherits Window {
 
                     snap_play := TouchArea {
                         mouse-cursor: pointer;
-                        enabled: control_buttons && !playing;
+                        enabled: control_buttons && !playing && can_play;
 
                         Rectangle {
                             border-width: 1px;
@@ -899,8 +920,10 @@ export component AppWindow inherits Window {
                         clicked => {
                             snap_playing = !snap_playing;
                             if snap_playing {
+                                backup = recording_values[current_recording];
                                 button_playing = true;
                             } else {
+                                can_play = false;
                                 button_playing = false;
                                 dial_values[0] = recording_values[current_recording][0];
                                 dial_values[1] = recording_values[current_recording][1];
@@ -915,7 +938,7 @@ export component AppWindow inherits Window {
 
                     play := TouchArea {
                         mouse-cursor: pointer;
-                        enabled: control_buttons && !snap_playing;
+                        enabled: control_buttons && !snap_playing && can_play;
 
                         Rectangle {
                             border-width: 1px;
@@ -963,6 +986,7 @@ export component AppWindow inherits Window {
                             if playing {
                                 button_playing = true;
                             } else {
+                                can_play = false;
                                 button_playing = false;
                             }
                             play_pause();
@@ -1077,7 +1101,6 @@ export component AppWindow inherits Window {
                                 play_pause();
                             } else {
                                 dial_values = backup;
-                                recording_values[current_recording] = backup;
                                 dials_edited = true;
                                 save();
                                 dials_edited = false;
