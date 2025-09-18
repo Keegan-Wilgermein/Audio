@@ -1044,7 +1044,6 @@ fn main() -> Result<(), Box<dyn STDError>> {
             ui.invoke_update();
 
             // Aquires read access to the loaded data
-            
             let settings = update_ref_count.read().unwrap();
             if !ui.get_locked() {
                 match save(DataType::Settings((*settings).clone()), "settings") {
