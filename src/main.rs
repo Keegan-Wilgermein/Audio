@@ -642,7 +642,10 @@ impl Settings {
 
         // Check for preset deletion
         if new.get_delete_preset() {
-            self.presets.remove(new.get_deleted_preset() as usize);
+            if self.presets.len() > new.get_deleted_preset() as usize {
+                self.presets.remove(new.get_deleted_preset() as usize);
+                new.set_can_delete(true);
+            }
         }
 
         // Check for preset rename
@@ -666,6 +669,7 @@ impl Settings {
         // Check for recording deletion
         if new.get_delete_recording() {
             self.recordings.remove(new.get_deleted_recording() as usize);
+            new.set_can_delete(true);
         }
 
         // Check for recording renaming

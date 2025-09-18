@@ -58,6 +58,9 @@ export component AppWindow inherits Window {
     in-out property <bool> backend_synced: false;
     in-out property <bool> should_update_dials: false;
 
+    private property <bool> should_delete: false;
+    in-out property <bool> can_delete: true;
+
     // -------- Callbacks --------
     callback update();
     callback save();
@@ -133,7 +136,7 @@ export component AppWindow inherits Window {
     // Periodically check for file changes
     Timer {
         interval: 5s;
-        running: !renaming_recording && !renaming_preset && !recording && !button_playing && !snapping;
+        running: !renaming_recording && !renaming_preset && !recording && !button_playing && !snapping && !deleting_recording && !deleting_preset;
 
         triggered => {
             started = true;
@@ -188,6 +191,24 @@ export component AppWindow inherits Window {
                 skipping = false;
                 can_skip = false;
             }
+        }
+    }
+
+    // Delays save until deleting animation is finished
+    Timer {
+        interval: 0.4s;
+        running: should_delete;
+
+        triggered => {
+            should_delete = false;
+            if delete_recording {
+                delete_recordings();
+                current_recording = 0;
+            } else if delete_preset {
+                save();
+            }
+            delete_recording = false;
+            delete_preset = false;
         }
     }
 
@@ -410,7 +431,7 @@ export component AppWindow inherits Window {
                         
                         VerticalLayout {
                             alignment: start;
-                            spacing: renaming_preset ? 8px : 16px;
+                            spacing: deleting_preset && delete_preset ? 0px : renaming_preset ? 8px : 16px;
 
                             animate spacing {
                                 duration: 0.3s;
@@ -419,7 +440,7 @@ export component AppWindow inherits Window {
 
                             TouchArea {
                                 mouse-cursor: pointer;
-                                enabled: (!renaming_preset && !deleting_preset && !snap_playing) || snapping;
+                                enabled: (!renaming_preset && !deleting_preset && !snap_playing && can_delete) || snapping;
 
                                 Rectangle {
                                     border-radius: 8px;
@@ -464,15 +485,15 @@ export component AppWindow inherits Window {
 
                                 Rectangle {
                                     border-radius: 8px;
-                                    background: deleting_preset ? @linear-gradient(90deg, #dc4242 30%, #ed2e2e00 100%) : renaming_preset ? @linear-gradient(90deg, #3f51b5 30%, #3f51b500 100%) : #ffffff00;
+                                    background: deleted_preset == index && delete_preset ? #ffffff00 : deleting_preset ? @linear-gradient(90deg, #dc4242 30%, #ed2e2e00 100%) : renaming_preset ? @linear-gradient(90deg, #3f51b5 30%, #3f51b500 100%) : #ffffff00;
 
                                     animate background {
                                         duration: 0.2s;
                                     }
 
                                     VerticalLayout {
-                                        padding: deleting_preset || renaming_preset ? 8px: 0px;
-                                        spacing: renaming_preset ? 0px : 4px;
+                                        padding: deleted_preset == index && delete_preset ? 0px : deleting_preset || renaming_preset ? 8px: 0px;
+                                        spacing: renaming_preset || (deleted_preset == index && delete_preset) ? 0px : 4px;
                                         alignment: start;
 
                                         animate padding, spacing {
@@ -495,14 +516,21 @@ export component AppWindow inherits Window {
                                             text: preset_names[index];
                                             font-weight: 700;
                                             overflow: elide;
+                                            font-size: deleted_preset == index && delete_preset ? 1px : 12px;
+                                            opacity: deleted_preset == index && delete_preset ? 0% : 100%;
+
+                                            animate font-size, opacity {
+                                                duration: 0.3s;
+                                                easing: ease-in-out-back;
+                                            }
                                         }
                 
                                         Text {
                                             text: "\{preset[0]}  \{preset[1]}  \{preset[2]}  \{preset[3]}  \{preset[4]}  \{preset[5]}";
                                             overflow: elide;
                                             vertical-alignment: center;
-                                            font-size: renaming_preset ? 1px : 12px;
-                                            opacity: renaming_preset ? 0% : 100%;
+                                            font-size: renaming_preset || (deleted_preset == index && delete_preset) ? 1px : 12px;
+                                            opacity: renaming_preset || (deleted_preset == index && delete_preset) ? 0% : 100%;
 
                                             animate font-size, opacity {
                                                 duration: 0.3s;
@@ -514,10 +542,12 @@ export component AppWindow inherits Window {
 
                                 clicked => {
                                     if deleting_preset {
-                                        deleted_preset = index;
-                                        delete_preset = true;
-                                        save();
-                                        delete_preset = false;
+                                        if can_delete {
+                                            can_delete = false;
+                                            should_delete = true;
+                                            deleted_preset = index;
+                                            delete_preset = true;
+                                        }
                                     } else {
                                         dial_values[0] = preset[0];
                                         dial_values[1] = preset[1];
@@ -635,7 +665,7 @@ export component AppWindow inherits Window {
 
                         VerticalLayout {
                             alignment: start;
-                            spacing: renaming_recording ? 8px : 16px;
+                            spacing: deleting_recording && delete_recording ? 0px : renaming_recording ? 8px : 16px;
 
                             animate spacing {
                                 duration: 0.3s;
@@ -645,21 +675,21 @@ export component AppWindow inherits Window {
                             for recording[index] in recording_values:
                             TouchArea {
                                 mouse-cursor: pointer;
-                                enabled: !renaming_recording && !playing && !snap_playing && !button_playing;
+                                enabled: !renaming_recording && !playing && !snap_playing && !button_playing && can_delete;
 
                                 Rectangle {
                                     border-radius: 8px;
                                     border-width: 1px;
                                     border-color: current_recording == index && !deleting_recording && !renaming_recording? @linear-gradient(90deg, #ffffff 10%, #ffffff00 90%) : #ffffff00;
-                                    background: deleting_recording ? @linear-gradient(90deg, #dc4242 30%, #ed2e2e00 100%) : renaming_recording ? @linear-gradient(90deg, #3f51b5 30%, #3f51b500 100%) : #ffffff00;
+                                    background: deleted_recording == index && delete_recording ? #ffffff00 : deleting_recording ? @linear-gradient(90deg, #dc4242 30%, #ed2e2e00 100%) : renaming_recording ? @linear-gradient(90deg, #3f51b5 30%, #3f51b500 100%) : #ffffff00;
                                     
                                     animate background, border-color {
                                         duration: 0.2s;
                                     }
                 
                                     VerticalLayout {
-                                        padding: deleting_recording || current_recording == index || renaming_recording ? 8px: 0px;
-                                        spacing: renaming_recording ? 0px : 4px;
+                                        padding: deleted_recording == index && delete_recording ? 0px : deleting_recording || current_recording == index || renaming_recording ? 8px: 0px;
+                                        spacing: renaming_recording || (deleted_recording == index && delete_recording) ? 0px : 4px;
                                         alignment: start;
 
                                         animate padding, spacing {
@@ -682,14 +712,21 @@ export component AppWindow inherits Window {
                                             text: recording_names[index];
                                             font-weight: 700;
                                             overflow: elide;
+                                            font-size: renaming_recording || (deleted_recording == index && delete_recording) ? 1px : 12px;
+                                            opacity: renaming_recording || (deleted_recording == index && delete_recording) ? 0% : 100%;
+
+                                            animate font-size, opacity {
+                                                duration: 0.3s;
+                                                easing: ease-in-out-back;
+                                            }
                                         }
                 
                                         Text {
                                             text: snapping ? "\{backup[0]}  \{backup[1]}  \{backup[2]}  \{backup[3]}  \{backup[4]}  \{backup[5]}" : "\{recording[0]}  \{recording[1]}  \{recording[2]}  \{recording[3]}  \{recording[4]}  \{recording[5]}";
                                             overflow: elide;
                                             vertical-alignment: center;
-                                            font-size: renaming_recording ? 1px : 12px;
-                                            opacity: renaming_recording ? 0% : 100%;
+                                            font-size: renaming_recording || (deleted_recording == index && delete_recording) ? 1px : 12px;
+                                            opacity: renaming_recording || (deleted_recording == index && delete_recording) ? 0% : 100%;
 
                                             animate font-size, opacity {
                                                 duration: 0.3s;
@@ -701,12 +738,11 @@ export component AppWindow inherits Window {
 
                                 clicked => {
                                     if deleting_recording {
+                                        can_delete = false;
                                         deleted_recording = index;
                                         deleted_recording_value = recording_names[index];
                                         delete_recording = true;
-                                        delete_recordings();
-                                        delete_recording = false;
-                                        current_recording = 0;
+                                        should_delete = true;
                                     } else {
                                         current_recording = index;
                                         dial_values[0] = recording_values[current_recording][0];
