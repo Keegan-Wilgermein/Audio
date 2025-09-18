@@ -155,6 +155,7 @@ export component AppWindow inherits Window {
             if backend_synced {
                 button_playing = false;
                 control_buttons = true;
+                backend_synced = false;
                 dial_values[0] = recording_values[current_recording][0];
                 dial_values[1] = recording_values[current_recording][1];
                 dial_values[2] = recording_values[current_recording][2];
