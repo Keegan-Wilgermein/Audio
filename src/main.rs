@@ -1034,7 +1034,7 @@ fn main() -> Result<(), Box<dyn STDError>> {
             let ui = ui_handle.unwrap();
 
             // This block is used to drop the write lock on the stored data as soon as the last write is completed
-            // This frees it to be used in the function called underneath
+            // This frees it to be used in the function called underneath and in any threads where it is needed
             {
                 // Acquires write access to the loaded data
                 let mut settings = update_ref_count.write().unwrap();
@@ -1044,13 +1044,16 @@ fn main() -> Result<(), Box<dyn STDError>> {
             ui.invoke_update();
 
             // Aquires read access to the loaded data
+            
             let settings = update_ref_count.read().unwrap();
-            match save(DataType::Settings((*settings).clone()), "settings") {
-                Some(error) => {
-                    ui.set_error_notification(Error::get_text(error));
-                    ui.set_error_recieved(true);
-                },
-                None => {
+            if !ui.get_locked() {
+                match save(DataType::Settings((*settings).clone()), "settings") {
+                    Some(error) => {
+                        ui.set_error_notification(Error::get_text(error));
+                        ui.set_error_recieved(true);
+                    },
+                    None => {
+                    }
                 }
             }
         }
