@@ -829,7 +829,6 @@ impl Tracker {
             };
 
             let mut initial_silence = true;
-            let mut told = false;
             
             let record_edit = move |data: RUBuffers| {
                 let mut interleaved = vec![];
@@ -843,9 +842,6 @@ impl Tracker {
                     channel1_len
                 }) {
                     if initial_silence {
-                        if !told {
-                            told = true;
-                        }
                         if data[0][sample] != 0.0 || data[1][sample] != 0.0 {
                             initial_silence = false;
                             continue;
@@ -853,9 +849,6 @@ impl Tracker {
                             continue;
                         }
                     } else {
-                        if told {
-                            told = false;
-                        }
                         interleaved.push(data[0][sample]);
                         interleaved.push(data[1][sample]);
                     }
