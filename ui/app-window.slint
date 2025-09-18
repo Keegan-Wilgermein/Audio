@@ -61,6 +61,9 @@ export component AppWindow inherits Window {
     private property <bool> should_delete: false;
     in-out property <bool> can_delete: true;
 
+    private property <bool> short: false;
+    private property <bool> short_snap: false;
+
     // -------- Callbacks --------
     callback update();
     callback save();
@@ -126,10 +129,20 @@ export component AppWindow inherits Window {
     // Reenable the recording button after a short period
     Timer {
         interval: 1s;
-        running: !recorder.enabled && !snapping && !snap_playing && !playing;
+        running: short;
 
         triggered => {
-            recorder.enabled = true;
+            short = false;
+        }
+    }
+
+    // Reenable the input listener button after a short period
+    Timer {
+        interval: 1s;
+        running: short_snap;
+
+        triggered => {
+            short_snap = false;
         }
     }
 
@@ -1021,7 +1034,7 @@ export component AppWindow inherits Window {
 
                     snapper := TouchArea {
                         mouse-cursor: pointer;
-                        enabled: !recording && !button_playing;
+                        enabled: !recording && !button_playing && !short_snap;
     
                         Rectangle {
                             border-width: 1px;
@@ -1073,6 +1086,7 @@ export component AppWindow inherits Window {
                                 playing = false;
                                 play_pause();
                             }
+                            short_snap = true;
                             renaming_recording = false;
                             deleting_recording = false;
                         }
@@ -1080,7 +1094,7 @@ export component AppWindow inherits Window {
 
                     recorder := TouchArea {
                         mouse-cursor: pointer;
-                        enabled: !snapping && !button_playing && !snap_playing && !playing;
+                        enabled: !snapping && !button_playing && !snap_playing && !playing && !short;
     
                         Rectangle {
                             border-width: 1px;
@@ -1128,7 +1142,7 @@ export component AppWindow inherits Window {
                                 button_playing = false;
                                 new_recording = true;
                             }
-                            self.enabled = false;
+                            short = true;
                             record();
                             new_recording = false;
                             if playing || snap_playing {

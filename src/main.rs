@@ -360,23 +360,6 @@ impl SnapShot {
         
         None
     }
-    
-    fn from(frames: u128, change_on_frame: Vec<i32>) -> SnapShot {
-        let mut list = vec![];
-
-        for frame in 0..frames {
-            for edit in 0..change_on_frame.len() {
-                if frame as i32 == change_on_frame[edit] {
-                    list.push(([0, 0, 0, 0, 0, 0], change_on_frame[edit]));
-                    break;
-                }
-            }
-        }
-
-        SnapShot {
-            frames: list,
-        }
-    }
 
     fn edited(previous: [i32; 6], next: [i32; 6]) -> bool {
         for number in 0..6 {
@@ -1132,7 +1115,7 @@ fn main() -> Result<(), Box<dyn STDError>> {
             if ui.get_playing() || ui.get_snap_playing() {
 
                 let values = settings.read().unwrap();
-                let mut snapshot = match load(&values.recordings[ui.get_current_recording() as usize].name, LoadType::Snapshot) {
+                let snapshot = match load(&values.recordings[ui.get_current_recording() as usize].name, LoadType::Snapshot) {
                     Ok(DataType::SnapShot(data)) => data,
                     _ => {
                         ui.set_error_notification(Error::get_text(Error::LoadError));
@@ -1141,23 +1124,6 @@ fn main() -> Result<(), Box<dyn STDError>> {
                         return;
                     },
                 };
-
-                if snapshot.frames.len() <= 1 || ui.get_snapping() {
-                    let sound_data = match StaticSoundData::from_file(format!("{}.wav", file)) {
-                        Ok(value) => value,
-                        Err(_) => {
-                            ui.set_error_notification(Error::get_text(Error::LoadError));
-                            ui.set_error_recieved(true);
-                            ui.set_playing(false);
-                            return;
-                        }
-                    };
-
-                    let length = sound_data.duration();
-
-                    let frames = length.as_millis() / 20;
-                    snapshot = SnapShot::from(frames, vec![0]);
-                }
 
             {
                 let mut should_play = playing.write().unwrap();
