@@ -69,6 +69,8 @@ export component AppWindow inherits Window {
     in-out property <bool> loop: false;
     in-out property <bool> auto_skip: true;
 
+    in-out property <int> new_recording_index: 0;
+
     // -------- Callbacks --------
     callback update();
     callback save();
@@ -270,6 +272,20 @@ export component AppWindow inherits Window {
         }
     }
 
+    // IDK, there's no delay but it doesn't work otherwise
+    Timer {
+        interval: 0s;
+        running: new_preset || new_recording;
+
+        triggered => {
+            if new_preset {
+                new_preset = false;
+            } else if new_recording {
+                new_recording = false;
+            }
+        }
+    }
+
     // -------- App layout --------
     HorizontalLayout {
         spacing: 32px;
@@ -422,7 +438,6 @@ export component AppWindow inherits Window {
                             clicked => {
                                 new_preset = true;
                                 save();
-                                new_preset = false;
                             }
                         }
 
@@ -662,8 +677,8 @@ export component AppWindow inherits Window {
                                             text: preset_names[index];
                                             font-weight: 700;
                                             overflow: elide;
-                                            font-size: deleted_preset == index && delete_preset ? 1px : 12px;
-                                            opacity: deleted_preset == index && delete_preset ? 0% : 100%;
+                                            font-size: (deleted_preset == index && delete_preset) || (new_preset && index == preset_names.length - 1) ? 1px : 12px;
+                                            opacity: (deleted_preset == index && delete_preset) || (new_preset && index == preset_names.length - 1) ? 0% : 100%;
 
                                             animate font-size, opacity {
                                                 duration: 0.3s;
@@ -675,8 +690,8 @@ export component AppWindow inherits Window {
                                             text: "\{preset[0]}  \{preset[1]}  \{preset[2]}  \{preset[3]}  \{preset[4]}  \{preset[5]}";
                                             overflow: elide;
                                             vertical-alignment: center;
-                                            font-size: renaming_preset || (deleted_preset == index && delete_preset) ? 1px : 12px;
-                                            opacity: renaming_preset || (deleted_preset == index && delete_preset) ? 0% : 100%;
+                                            font-size: renaming_preset || (deleted_preset == index && delete_preset) || (new_preset && index == preset_names.length - 1) ? 1px : 12px;
+                                            opacity: renaming_preset || (deleted_preset == index && delete_preset) || (new_preset && index == preset_names.length - 1) ? 0% : 100%;
 
                                             animate font-size, opacity {
                                                 duration: 0.3s;
@@ -927,7 +942,7 @@ export component AppWindow inherits Window {
 
                         VerticalLayout {
                             alignment: start;
-                            spacing: deleting_recording && delete_recording ? 0px : renaming_recording ? 8px : 16px;
+                            spacing: (deleting_recording && delete_recording) ? 0px : renaming_recording ? 8px : 16px;
 
                             animate spacing {
                                 duration: 0.3s;
@@ -942,7 +957,7 @@ export component AppWindow inherits Window {
                                 Rectangle {
                                     border-radius: 8px;
                                     border-width: 1px;
-                                    border-color: current_recording == index && !deleting_recording && !renaming_recording? @linear-gradient(90deg, #ffffff 10%, #ffffff00 90%) : #ffffff00;
+                                    border-color: current_recording == index && !deleting_recording && !renaming_recording && !(new_recording && index == recording_names.length - 1) ? @linear-gradient(90deg, #ffffff 10%, #ffffff00 90%) : #ffffff00;
                                     background: deleted_recording == index && delete_recording ? #ffffff00 : deleting_recording ? @linear-gradient(90deg, #dc4242 30%, #ed2e2e00 100%) : renaming_recording ? @linear-gradient(90deg, #3f51b5 30%, #3f51b500 100%) : #ffffff00;
                                     
                                     animate background, border-color {
@@ -951,7 +966,7 @@ export component AppWindow inherits Window {
                 
                                     VerticalLayout {
                                         padding: deleted_recording == index && delete_recording ? 0px : deleting_recording || current_recording == index || renaming_recording ? 8px: 0px;
-                                        spacing: renaming_recording || (deleted_recording == index && delete_recording) ? 0px : 4px;
+                                        spacing: renaming_recording || (deleted_recording == index && delete_recording) || (new_recording && index == recording_names.length - 1) ? 0px : 4px;
                                         alignment: start;
 
                                         animate padding, spacing {
@@ -974,8 +989,8 @@ export component AppWindow inherits Window {
                                             text: recording_names[index];
                                             font-weight: 700;
                                             overflow: elide;
-                                            font-size: renaming_recording || (deleted_recording == index && delete_recording) ? 1px : 12px;
-                                            opacity: renaming_recording || (deleted_recording == index && delete_recording) ? 0% : 100%;
+                                            font-size: renaming_recording || (deleted_recording == index && delete_recording) || (new_recording && index == recording_names.length - 1) ? 1px : 12px;
+                                            opacity: renaming_recording || (deleted_recording == index && delete_recording) || (new_recording && index == recording_names.length - 1) ? 0% : 100%;
 
                                             animate font-size, opacity {
                                                 duration: 0.3s;
@@ -987,8 +1002,8 @@ export component AppWindow inherits Window {
                                             text: snapping || locked ? "\{backup[index][0]}  \{backup[index][1]}  \{backup[index][2]}  \{backup[index][3]}  \{backup[index][4]}  \{backup[index][5]}" : "\{recording[0]}  \{recording[1]}  \{recording[2]}  \{recording[3]}  \{recording[4]}  \{recording[5]}";
                                             overflow: elide;
                                             vertical-alignment: center;
-                                            font-size: renaming_recording || (deleted_recording == index && delete_recording) ? 1px : 12px;
-                                            opacity: renaming_recording || (deleted_recording == index && delete_recording) ? 0% : 100%;
+                                            font-size: renaming_recording || (deleted_recording == index && delete_recording) || (new_recording && index == recording_names.length - 1) ? 1px : 12px;
+                                            opacity: renaming_recording || (deleted_recording == index && delete_recording) || (new_recording && index == recording_names.length - 1) ? 0% : 100%;
                                             color: locked || snapping || snap_playing ? #5d5d5d : #ffffff;
 
                                             animate font-size, opacity, color {
@@ -1412,7 +1427,6 @@ export component AppWindow inherits Window {
                             }
                             short = true;
                             record();
-                            new_recording = false;
                             if playing || snap_playing {
                                 sync_playing_with_ui();
                             }

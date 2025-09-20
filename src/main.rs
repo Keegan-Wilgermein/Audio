@@ -742,8 +742,7 @@ impl Settings {
                     }
                 }
             }
-
-            updated_recordings.sort_by_key(|recording| recording.name.clone());
+            
             self.recordings = updated_recordings;
         }
     }
