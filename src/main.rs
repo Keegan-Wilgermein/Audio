@@ -34,9 +34,9 @@ enum Error {
 impl Error {
     fn get_text(kind: Error) -> SharedString {
         match kind {
-            Error::SaveError => SharedString::from("Failed to save data ... Reverting to previous save"),
+            Error::SaveError => SharedString::from("Failed to save data"),
             Error::LoadError => SharedString::from("Data doesn't exist"),
-            Error::RecordError => SharedString::from("Recording failed ... Please try again"),
+            Error::RecordError => SharedString::from("Recording failed"),
             Error::WriteError => SharedString::from("Failed to write audio"),
             Error::ReadError => SharedString::from("File read failed"),
             Error::RenameError => SharedString::from("Failed to rename file"),
@@ -46,7 +46,7 @@ impl Error {
             Error::ExistsError => SharedString::from("Name already exists"),
             Error::SaveFileRenameError => SharedString::from("Can't rename to 'settings'"),
             Error::PlaybackError => SharedString::from("Failed to play audio"),
-            Error::ControllerError => SharedString::from("Audio controller crashed ... restart required"),
+            Error::ControllerError => SharedString::from("Audio controller crashed"),
         }
     }
 }
@@ -168,13 +168,15 @@ impl File {
                 }
             };
 
-            let sub_bass = EqFilterBuilder::new(EqFilterKind::LowShelf, 80.0, 0.0, 0.8);
-            let bass = EqFilterBuilder::new(EqFilterKind::Bell, 120.0, 0.0, 2.0);
-            let mids = EqFilterBuilder::new(EqFilterKind::Bell, 500.0, 0.0, 2.0);
-            let vocals = EqFilterBuilder::new(EqFilterKind::Bell, 2500.0, 0.0, 2.0);
-            let treble = EqFilterBuilder::new(EqFilterKind::HighShelf, 6000.0, 0.0, 0.8);
+            // Filter setup
+            let sub_bass = EqFilterBuilder::new(EqFilterKind::LowShelf, 40.0, 0.0, 1.0);
+            let bass = EqFilterBuilder::new(EqFilterKind::Bell, 155.0, 0.0, 0.82);
+            let mids = EqFilterBuilder::new(EqFilterKind::Bell, 1125.0, 0.0, 0.64);
+            let vocals = EqFilterBuilder::new(EqFilterKind::Bell, 1850.0, 0.0, 0.6);
+            let treble = EqFilterBuilder::new(EqFilterKind::HighShelf, 12000.0, 0.0, 0.75 );
             let pan = PanningControlBuilder::default();
 
+            // Filter handles for real time updating
             let mut builder = TrackBuilder::new();
             let mut sub_bass_handle = builder.add_effect(sub_bass);
             let mut bass_handle = builder.add_effect(bass);
@@ -221,27 +223,27 @@ impl File {
                                 sub_bass_handle.set_gain(if snapshot.frames[edited_frame].0[0] == -7 {
                                     -60.0
                                 } else {
-                                    snapshot.frames[edited_frame].0[0] as f32 * 2.0
+                                    snapshot.frames[edited_frame].0[0] as f32 * 4.0
                                 }, Tween::default());
                                 bass_handle.set_gain(if snapshot.frames[edited_frame].0[1] == -7 {
                                     -60.0
                                 } else {
-                                    snapshot.frames[edited_frame].0[1] as f32 * 2.0
+                                    snapshot.frames[edited_frame].0[1] as f32 * 4.0
                                 }, Tween::default());
                                 mids_handle.set_gain(if snapshot.frames[edited_frame].0[2] == -7 {
                                     -60.0
                                 } else {
-                                    snapshot.frames[edited_frame].0[2] as f32 * 2.0
+                                    snapshot.frames[edited_frame].0[2] as f32 * 4.0
                                 }, Tween::default());
                                 vocals_handle.set_gain(if snapshot.frames[edited_frame].0[3] == -7 {
                                     -60.0
                                 } else {
-                                    snapshot.frames[edited_frame].0[3] as f32 * 2.0
+                                    snapshot.frames[edited_frame].0[3] as f32 * 4.0
                                 }, Tween::default());
                                 treble_handle.set_gain(if snapshot.frames[edited_frame].0[4] == -7 {
                                     -60.0
                                 } else {
-                                    snapshot.frames[edited_frame].0[4] as f32 * 2.0
+                                    snapshot.frames[edited_frame].0[4] as f32 * 4.0
                                 }, Tween::default());
                                 panning_handle.set_panning(snapshot.frames[edited_frame].0[5] as f32 * 0.15, Tween::default());
     
@@ -265,27 +267,27 @@ impl File {
                         sub_bass_handle.set_gain(if value.recordings[selected_recording].sub_bass == -7 {
                             -60.0
                         } else {
-                            value.recordings[selected_recording].sub_bass as f32 * 2.0
+                            value.recordings[selected_recording].sub_bass as f32 * 4.0
                         }, Tween::default());
                         bass_handle.set_gain(if value.recordings[selected_recording].bass == -7 {
                             -60.0
                         } else {
-                            value.recordings[selected_recording].bass as f32 * 2.0
+                            value.recordings[selected_recording].bass as f32 * 4.0
                         }, Tween::default());
                         mids_handle.set_gain(if value.recordings[selected_recording].mids == -7 {
                             -60.0
                         } else {
-                            value.recordings[selected_recording].mids as f32 * 2.0
+                            value.recordings[selected_recording].mids as f32 * 4.0
                         }, Tween::default());
                         vocals_handle.set_gain(if value.recordings[selected_recording].vocals == -7 {
                             -60.0
                         } else {
-                            value.recordings[selected_recording].vocals as f32 * 2.0
+                            value.recordings[selected_recording].vocals as f32 * 4.0
                         }, Tween::default());
                         treble_handle.set_gain(if value.recordings[selected_recording].treble == -7 {
                             -60.0
                         } else {
-                            value.recordings[selected_recording].treble as f32 * 2.0
+                            value.recordings[selected_recording].treble as f32 * 4.0
                         }, Tween::default());
                         panning_handle.set_panning(value.recordings[selected_recording].pan as f32 * 0.15, Tween::default());
                         
@@ -1020,7 +1022,9 @@ fn main() -> Result<(), Box<dyn STDError>> {
             ui.set_recording_names(Recording::send_names(&settings.recordings));
 
             // Sends recording values to the ui to be displayed
-            ui.set_recording_values(Recording::send_values(&settings.recordings, &index_data.recording_length));
+            if !ui.get_locked() {
+                ui.set_recording_values(Recording::send_values(&settings.recordings, &index_data.recording_length));
+            }
         }
     });
 
