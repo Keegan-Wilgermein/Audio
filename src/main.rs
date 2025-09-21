@@ -171,8 +171,8 @@ impl File {
             // Filter setup
             let sub_bass = EqFilterBuilder::new(EqFilterKind::LowShelf, 40.0, 0.0, 1.0);
             let bass = EqFilterBuilder::new(EqFilterKind::Bell, 155.0, 0.0, 0.82);
-            let mids = EqFilterBuilder::new(EqFilterKind::Bell, 1125.0, 0.0, 0.64);
-            let vocals = EqFilterBuilder::new(EqFilterKind::Bell, 1850.0, 0.0, 0.6);
+            let low_mids = EqFilterBuilder::new(EqFilterKind::Bell, 625.0, 0.0, 0.83);
+            let high_mids = EqFilterBuilder::new(EqFilterKind::Bell, 1500.0, 0.0, 1.5);
             let treble = EqFilterBuilder::new(EqFilterKind::HighShelf, 12000.0, 0.0, 0.75 );
             let pan = PanningControlBuilder::default();
 
@@ -180,8 +180,8 @@ impl File {
             let mut builder = TrackBuilder::new();
             let mut sub_bass_handle = builder.add_effect(sub_bass);
             let mut bass_handle = builder.add_effect(bass);
-            let mut mids_handle = builder.add_effect(mids);
-            let mut vocals_handle = builder.add_effect(vocals);
+            let mut low_mids_handle = builder.add_effect(low_mids);
+            let mut high_mids_handle = builder.add_effect(high_mids);
             let mut treble_handle = builder.add_effect(treble);
             let mut panning_handle = builder.add_effect(pan);
 
@@ -230,12 +230,12 @@ impl File {
                                 } else {
                                     snapshot.frames[edited_frame].0[1] as f32 * 4.0
                                 }, Tween::default());
-                                mids_handle.set_gain(if snapshot.frames[edited_frame].0[2] == -7 {
+                                low_mids_handle.set_gain(if snapshot.frames[edited_frame].0[2] == -7 {
                                     -60.0
                                 } else {
                                     snapshot.frames[edited_frame].0[2] as f32 * 4.0
                                 }, Tween::default());
-                                vocals_handle.set_gain(if snapshot.frames[edited_frame].0[3] == -7 {
+                                high_mids_handle.set_gain(if snapshot.frames[edited_frame].0[3] == -7 {
                                     -60.0
                                 } else {
                                     snapshot.frames[edited_frame].0[3] as f32 * 4.0
@@ -274,15 +274,15 @@ impl File {
                         } else {
                             value.recordings[selected_recording].bass as f32 * 4.0
                         }, Tween::default());
-                        mids_handle.set_gain(if value.recordings[selected_recording].mids == -7 {
+                        low_mids_handle.set_gain(if value.recordings[selected_recording].low_mids == -7 {
                             -60.0
                         } else {
-                            value.recordings[selected_recording].mids as f32 * 4.0
+                            value.recordings[selected_recording].low_mids as f32 * 4.0
                         }, Tween::default());
-                        vocals_handle.set_gain(if value.recordings[selected_recording].vocals == -7 {
+                        high_mids_handle.set_gain(if value.recordings[selected_recording].high_mids == -7 {
                             -60.0
                         } else {
-                            value.recordings[selected_recording].vocals as f32 * 4.0
+                            value.recordings[selected_recording].high_mids as f32 * 4.0
                         }, Tween::default());
                         treble_handle.set_gain(if value.recordings[selected_recording].treble == -7 {
                             -60.0
@@ -392,8 +392,8 @@ struct Preset {
     name: String,
     sub_bass: i32,
     bass: i32,
-    mids: i32,
-    vocals: i32,
+    low_mids: i32,
+    high_mids: i32,
     treble: i32,
     pan: i32,
 }
@@ -404,8 +404,8 @@ impl Preset {
             name: String::from("New Preset"),
             sub_bass: values[0],
             bass: values[1],
-            mids: values[2],
-            vocals: values[3],
+            low_mids: values[2],
+            high_mids: values[3],
             treble: values[4],
             pan: values[5],
         }
@@ -426,8 +426,8 @@ impl Preset {
             
             preset_values.push(list[values].sub_bass);
             preset_values.push(list[values].bass);
-            preset_values.push(list[values].mids);
-            preset_values.push(list[values].vocals);
+            preset_values.push(list[values].low_mids);
+            preset_values.push(list[values].high_mids);
             preset_values.push(list[values].treble);
             preset_values.push(list[values].pan);
 
@@ -443,8 +443,8 @@ struct Recording {
     name: String,
     sub_bass: i32,
     bass: i32,
-    mids: i32,
-    vocals: i32,
+    low_mids: i32,
+    high_mids: i32,
     treble: i32,
     pan: i32,
 }
@@ -455,8 +455,8 @@ impl Recording {
             name: name,
             sub_bass: 0,
             bass: 0,
-            mids: 0,
-            vocals: 0,
+            low_mids: 0,
+            high_mids: 0,
             treble: 0,
             pan: 0,
         }
@@ -467,8 +467,8 @@ impl Recording {
             name: name,
             sub_bass: values[0],
             bass: values[1],
-            mids: values[2],
-            vocals: values[3],
+            low_mids: values[2],
+            high_mids: values[3],
             treble: values[4],
             pan: values[5],
         }
@@ -479,8 +479,8 @@ impl Recording {
 
         list[0] = recording.sub_bass;
         list[1] = recording.bass;
-        list[2] = recording.mids;
-        list[3] = recording.vocals;
+        list[2] = recording.low_mids;
+        list[3] = recording.high_mids;
         list[4] = recording.treble;
         list[5] = recording.pan;
 
@@ -492,8 +492,8 @@ impl Recording {
 
         list.push(recording.sub_bass);
         list.push(recording.bass);
-        list.push(recording.mids);
-        list.push(recording.vocals);
+        list.push(recording.low_mids);
+        list.push(recording.high_mids);
         list.push(recording.treble);
         list.push(recording.pan);
 
@@ -530,8 +530,8 @@ impl Recording {
             
             recording_values.push(list[values].sub_bass);
             recording_values.push(list[values].bass);
-            recording_values.push(list[values].mids);
-            recording_values.push(list[values].vocals);
+            recording_values.push(list[values].low_mids);
+            recording_values.push(list[values].high_mids);
             recording_values.push(list[values].treble);
             recording_values.push(list[values].pan);
 
