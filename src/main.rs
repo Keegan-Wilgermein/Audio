@@ -32,8 +32,8 @@ enum Error {
 }
 
 impl Error {
-    fn get_text(kind: Error) -> SharedString {
-        match kind {
+    fn get_text(self) -> SharedString {
+        match self {
             Error::SaveError => SharedString::from("Failed to save data"),
             Error::LoadError => SharedString::from("Data doesn't exist"),
             Error::RecordError => SharedString::from("Recording failed"),
@@ -307,7 +307,7 @@ impl File {
             
             if snapping {
                 snapshot.frames.remove(0);
-                SnapShot::save(snapshot, &File::truncate(&mut file));
+                snapshot.save(&File::truncate(&mut file));
             }
 
             None
@@ -381,8 +381,8 @@ impl SnapShot {
         false
     }
 
-    fn save(snapshot: SnapShot, name: &str) -> Option<Error> {
-        save(DataType::SnapShot(snapshot), name)
+    fn save(self, name: &str) -> Option<Error> {
+        save(DataType::SnapShot(self), name)
     }
 }
 
@@ -474,28 +474,28 @@ impl Recording {
         }
     }
 
-    fn parse(recording: &Recording) -> [i32; 6] {
-        let mut list = [0, 0, 0, 0, 0, 0];
+    fn parse(&self) -> [i32; 6] {
+        let mut list: [i32; 6] = [0, 0, 0, 0, 0, 0];
 
-        list[0] = recording.sub_bass;
-        list[1] = recording.bass;
-        list[2] = recording.low_mids;
-        list[3] = recording.high_mids;
-        list[4] = recording.treble;
-        list[5] = recording.pan;
+        list[0] = self.sub_bass;
+        list[1] = self.bass;
+        list[2] = self.low_mids;
+        list[3] = self.high_mids;
+        list[4] = self.treble;
+        list[5] = self.pan;
 
         list
     }
 
-    fn parse_vec(recording: &Recording) -> Vec<i32> {
+    fn parse_vec_from_recording(&self) -> Vec<i32> {
         let mut list = vec![];
 
-        list.push(recording.sub_bass);
-        list.push(recording.bass);
-        list.push(recording.low_mids);
-        list.push(recording.high_mids);
-        list.push(recording.treble);
-        list.push(recording.pan);
+        list.push(self.sub_bass);
+        list.push(self.bass);
+        list.push(self.low_mids);
+        list.push(self.high_mids);
+        list.push(self.treble);
+        list.push(self.pan);
 
         list
     }
@@ -552,16 +552,16 @@ impl Recording {
         for name in 0..old.len() {
             if new.row_data(name).unwrap() != old[name].name {
                 if new.row_data(name).unwrap().contains(&String::from("Default taken...")) {
-                    recording_list.push(Recording::from(&old[name].name, Recording::parse(&old[name])));
+                    recording_list.push(Recording::from(&old[name].name, old[name].parse()));
                     fallback_error_occured = true;
                 } else if new.row_data(name).unwrap() == String::from("settings") {
-                    recording_list.push(Recording::from(&old[name].name, Recording::parse(&old[name])));
+                    recording_list.push(Recording::from(&old[name].name, old[name].parse()));
                     save_file_rename_error_occured = true;
                 } else if new.row_data(name).unwrap().is_empty() || new.row_data(name).unwrap() == String::from("") {
-                    recording_list.push(Recording::from(&old[name].name, Recording::parse(&old[name])));
+                    recording_list.push(Recording::from(&old[name].name, old[name].parse()));
                     empty_error_occured = true;
                 } else if File::exists(String::from(new.row_data(name).unwrap()), &old) {
-                    recording_list.push(Recording::from(&old[name].name, Recording::parse(&old[name])));
+                    recording_list.push(Recording::from(&old[name].name, old[name].parse()));
                     exists_error_occured = true;
                 } else {
                     match File::rename(&old[name].name, String::from(new.row_data(name).unwrap())) {
@@ -571,10 +571,10 @@ impl Recording {
                         None => {
                         }
                     }
-                    recording_list.push(Recording::from(&String::from(new.row_data(name).unwrap()), Recording::parse(&old[name])));
+                    recording_list.push(Recording::from(&String::from(new.row_data(name).unwrap()), old[name].parse()));
                 }
             } else {
-                recording_list.push(Recording::from(&old[name].name, Recording::parse(&old[name])));
+                recording_list.push(Recording::from(&old[name].name, old[name].parse()));
             }
         }
         
@@ -617,31 +617,31 @@ impl Settings {
         }
     }
 
-    fn sync(&mut self, new: &AppWindow) {
+    fn sync(&mut self, ui: &AppWindow) {
         let index_data = self.get_index_data();
 
         let mut dials = [0, 0, 0, 0, 0, 0];
         for index in 0..6 {
-            dials[index] = new.get_dial_values().row_data(index).unwrap();
+            dials[index] = ui.get_dial_values().row_data(index).unwrap();
         }
 
         // Check for new preset creation
-        if new.get_new_preset() {
+        if ui.get_new_preset() {
             self.presets.push(Preset::from(dials));
         }
 
         // Check for preset deletion
-        if new.get_delete_preset() {
-            if self.presets.len() > new.get_deleted_preset() as usize {
-                self.presets.remove(new.get_deleted_preset() as usize);
-                new.set_can_delete(true);
+        if ui.get_delete_preset() {
+            if self.presets.len() > ui.get_deleted_preset() as usize {
+                self.presets.remove(ui.get_deleted_preset() as usize);
+                ui.set_can_delete(true);
             }
         }
 
         // Check for preset rename
-        if new.get_rename_preset() {
+        if ui.get_rename_preset() {
             for preset in 0..index_data.preset_length {
-                self.presets[preset].name = String::from(match new.get_preset_names().row_data(preset) {
+                self.presets[preset].name = String::from(match ui.get_preset_names().row_data(preset) {
                     Some(name) => name,
                     None => SharedString::from("New Preset"),
                 });
@@ -650,37 +650,37 @@ impl Settings {
 
         // Check for recording edits
         if index_data.recording_length > 0 {
-            let position = new.get_current_recording() as usize;
-            if new.get_dials_edited() {
+            let position = ui.get_current_recording() as usize;
+            if ui.get_dials_edited() {
                 self.recordings[position] = Recording::from(&self.recordings[position].name, dials);
             }
         }
 
         // Check for recording deletion
-        if new.get_delete_recording() {
-            self.recordings.remove(new.get_deleted_recording() as usize);
-            new.set_can_delete(true);
+        if ui.get_delete_recording() {
+            self.recordings.remove(ui.get_deleted_recording() as usize);
+            ui.set_can_delete(true);
         }
 
         // Check for recording renaming
-        if new.get_renamed_recording() {
-            self.recordings = match Recording::rename(&self.recordings, new.get_recording_names()) {
+        if ui.get_renamed_recording() {
+            self.recordings = match Recording::rename(&self.recordings, ui.get_recording_names()) {
                 Ok(value) => value,
                 Err(error) => {
-                    new.set_error_notification(Error::get_text(error.1));
-                    new.set_error_recieved(true);
+                    ui.set_error_notification(error.1.get_text());
+                    ui.set_error_recieved(true);
                     error.0
                 },
             };
         }
 
         // Sync recording data with any changes that might have been made while the app was closed
-        if new.get_started() || new.get_new_recording() {
+        if ui.get_started() || ui.get_new_recording() {
             let file_names = match File::search("./", "wav") {
                 Ok(File::Names(value)) => value,
                 Err(error) => {
-                    new.set_error_notification(Error::get_text(error));
-                    new.set_error_recieved(true);
+                    ui.set_error_notification(error.get_text());
+                    ui.set_error_recieved(true);
                     vec![String::from("Couldn't read files")]
                 }
             };
@@ -688,8 +688,8 @@ impl Settings {
             let mut snapshot_names = match File::search("./", "bin") {
                 Ok(File::Names(value)) => value,
                 Err(error) => {
-                    new.set_error_notification(Error::get_text(error));
-                    new.set_error_recieved(true);
+                    ui.set_error_notification(error.get_text());
+                    ui.set_error_recieved(true);
                     vec![String::from("Couldn't read files")]
                 }
             };
@@ -724,8 +724,8 @@ impl Settings {
                         if file_names[name] != snapshot_names[file] {
                             match SnapShot::create(&file_names[name]) {
                                 Some(error) => {
-                                    new.set_error_notification(Error::get_text(error));
-                                    new.set_error_recieved(true);
+                                    ui.set_error_notification(error.get_text());
+                                    ui.set_error_recieved(true);
                                 },
                                 None => (),
                             }
@@ -737,8 +737,8 @@ impl Settings {
                 } else {
                     match SnapShot::create(&file_names[name]) {
                         Some(error) => {
-                            new.set_error_notification(Error::get_text(error));
-                            new.set_error_recieved(true);
+                            ui.set_error_notification(error.get_text());
+                            ui.set_error_recieved(true);
                         },
                         None => (),
                     }
@@ -992,7 +992,7 @@ fn main() -> Result<(), Box<dyn STDError>> {
 
             match setup_error {
                 Some(error) => {
-                    ui.set_error_notification(Error::get_text(error));
+                    ui.set_error_notification(error.get_text());
                     ui.set_error_recieved(true);
                     setup_error = None;
                 },
@@ -1051,7 +1051,7 @@ fn main() -> Result<(), Box<dyn STDError>> {
             if !ui.get_locked() {
                 match save(DataType::Settings((*settings).clone()), "settings") {
                     Some(error) => {
-                        ui.set_error_notification(Error::get_text(error));
+                        ui.set_error_notification(error.get_text());
                         ui.set_error_recieved(true);
                     },
                     None => {
@@ -1075,7 +1075,7 @@ fn main() -> Result<(), Box<dyn STDError>> {
             if ui.get_recording() {
                 match tracker_ref_count.record() {
                     Some(error) => {
-                        ui.set_error_notification(Error::get_text(error));
+                        ui.set_error_notification(error.get_text());
                         ui.set_error_recieved(true);
                         poison_count.recorder.clear_poison();
                         ui.set_recording(false);
@@ -1098,7 +1098,7 @@ fn main() -> Result<(), Box<dyn STDError>> {
 
             match File::delete(String::from(ui.get_deleted_recording_value())) {
                 Some(error) => {
-                    ui.set_error_notification(Error::get_text(error));
+                    ui.set_error_notification(error.get_text());
                     ui.set_error_recieved(true);
                 },
                 None => {
@@ -1151,7 +1151,7 @@ fn main() -> Result<(), Box<dyn STDError>> {
 
                 match File::play(format!("{}.wav", file), settings.clone(), ui.get_current_recording() as usize, playing.clone(), ui.get_snapping(), ui.get_snap_playing(), snapshot, dials.clone()) {
                     Some(error) => {
-                        ui.set_error_notification(Error::get_text(error));
+                        ui.set_error_notification(error.get_text());
                         ui.set_error_recieved(true);
                         ui.set_playing(false);
                         {
@@ -1181,7 +1181,7 @@ fn main() -> Result<(), Box<dyn STDError>> {
             } else {
                 let settings = settings_ref_count.read().unwrap();
                 if settings.recordings.len() > 0 {
-                    ui.set_dial_values(ModelRc::new(VecModel::from(Recording::parse_vec(&settings.recordings[ui.get_current_recording() as usize]))));
+                    ui.set_dial_values(ModelRc::new(VecModel::from(settings.recordings[ui.get_current_recording() as usize].parse_vec_from_recording())));
                 }
                 false
             });
