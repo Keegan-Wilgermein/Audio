@@ -186,6 +186,44 @@ export component AppWindow inherits Window {
         dials_edited = false;
     }
 
+    function calculate_skipped_to_recording(forward: bool) {
+        if forward {
+            if current_recording < recording_names.length - 1 {
+                current_recording += 1;
+            } else {
+                current_recording = 0;
+            }
+        } else {
+            if current_recording > 0 {
+                current_recording -= 1;
+            } else {
+                current_recording = recording_names.length - 1;
+            }
+        }
+    }
+
+    function skip(skipped_with_button: bool, skipped_forward: bool) {
+        skipping = true;
+        if input_playback {
+            input_playback = false;
+            audio_or_input_playback = false;
+            play_pause();
+            if skipped_with_button {
+                calculate_skipped_to_recording(skipped_forward)
+            }
+            skipped_while_input_playing = true;
+        }
+        if audio_playback {
+            audio_playback = false;
+            audio_or_input_playback = false;
+            play_pause();
+            if skipped_with_button {
+                calculate_skipped_to_recording(skipped_forward)
+            }
+            skipped_while_audio_playing = true;
+        }
+    }
+
     // -------- Timers --------
     // Loads settings to UI on startup
     Timer {
@@ -986,7 +1024,7 @@ export component AppWindow inherits Window {
 
                             for recording[index] in recording_values:
                             BasicButton {
-                                enabled: !recording_renaming_mode && !audio_playback && !input_playback && !audio_or_input_playback && can_delete;
+                                enabled: !recording_renaming_mode && can_delete;
 
                                 Rectangle {
                                     border-radius: 8px;
@@ -1054,6 +1092,9 @@ export component AppWindow inherits Window {
                                         should_delete = true;
                                     } else {
                                         current_recording = index;
+                                        if audio_or_input_playback {
+                                            skip(false, false);
+                                        }
                                         sync_current_dial_values_with_recording_values();
                                     }
                                 }
@@ -1101,29 +1142,7 @@ export component AppWindow inherits Window {
                         }
 
                         clicked => {
-                            skipping = true;
-                            if input_playback {
-                                input_playback = false;
-                                audio_or_input_playback = false;
-                                play_pause();
-                                if current_recording > 0 {
-                                    current_recording -= 1;
-                                } else {
-                                    current_recording = recording_names.length - 1;
-                                }
-                                skipped_while_input_playing = true;
-                            }
-                            if audio_playback {
-                                audio_playback = false;
-                                audio_or_input_playback = false;
-                                play_pause();
-                                if current_recording > 0 {
-                                    current_recording -= 1;
-                                } else {
-                                    current_recording = recording_names.length - 1;
-                                }
-                                skipped_while_audio_playing = true;
-                            }
+                            skip(true, false);
                             sync_current_dial_values_with_recording_values();
                         }
                     }
@@ -1233,29 +1252,7 @@ export component AppWindow inherits Window {
                         }
 
                         clicked => {
-                            skipping = true;
-                            if input_playback {
-                                input_playback = false;
-                                audio_or_input_playback = false;
-                                play_pause();
-                                if current_recording < recording_names.length - 1 {
-                                    current_recording += 1;
-                                } else {
-                                    current_recording = 0;
-                                }
-                                skipped_while_input_playing = true;
-                            }
-                            if audio_playback {
-                                audio_playback = false;
-                                audio_or_input_playback = false;
-                                play_pause();
-                                if current_recording < recording_names.length - 1 {
-                                    current_recording += 1;
-                                } else {
-                                    current_recording = 0;
-                                }
-                                skipped_while_audio_playing = true;
-                            }
+                            skip(true, true);
                             sync_current_dial_values_with_recording_values();
                         }
                     }
