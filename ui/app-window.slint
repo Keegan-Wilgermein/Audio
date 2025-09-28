@@ -101,7 +101,7 @@ export component AppWindow inherits Window {
     in-out property <string> deleted_recording_name: "";
     
     // ---- Playback ----
-    private property <bool> audio_or_input_playback: false;
+    out property <bool> audio_or_input_playback: audio_playback || input_playback;
     private property <bool> play_and_skip_buttons: true;
     private property <bool> playback_allowed: true;
     in-out property <bool> locked: false;
@@ -144,8 +144,8 @@ export component AppWindow inherits Window {
     private property <color> generic_disabled: #5d5d5d;
     private property <color> play_and_record_colour: #ec4747;
     private property <color> play_and_record_disabled: #912e2e;
-    private property <color> snap_colour: #479cec;
-    private property <color> snap_disabled: #244c72;
+    private property <color> input_playback_colour: #479cec;
+    private property <color> input_playback_disabled: #244c72;
     private property <brush> rename_colour: @linear-gradient(90deg, #3f51b5 30%, transparent_colour 100%);
     private property <brush> delete_colour: @linear-gradient(90deg, #dc4242 30%, transparent_colour 100%);
     private property <color> error_colour: #dc4242;
@@ -206,7 +206,6 @@ export component AppWindow inherits Window {
         skipping = true;
         if input_playback {
             input_playback = false;
-            audio_or_input_playback = false;
             play_pause();
             if skipped_with_button {
                 calculate_skipped_to_recording(skipped_forward)
@@ -215,13 +214,46 @@ export component AppWindow inherits Window {
         }
         if audio_playback {
             audio_playback = false;
-            audio_or_input_playback = false;
             play_pause();
             if skipped_with_button {
                 calculate_skipped_to_recording(skipped_forward)
             }
             skipped_while_audio_playing = true;
         }
+    }
+
+    function set_playing_values(audio: bool, input: bool) {
+        if audio {
+            audio_playback = !audio_playback;
+            if audio_playback {
+                dial_values_when_locked = recording_values;
+            } else {
+                playback_allowed = false;
+            }
+            play_pause();
+        } else if input {
+            input_playback = !input_playback;
+            if input_playback {
+                dial_values_when_locked = recording_values;
+                locked = false;
+            } else {
+                playback_allowed = false;
+                sync_current_dial_values_with_recording_values();
+            }
+            play_pause();
+        } else if !audio && !input {
+            audio_playback = false;
+            input_playback = false;
+            sync_playing_with_ui();
+        }
+    }
+
+    function disable_buttons_on_record() {
+        dial_values_when_locked = recording_values;
+        recording_renaming_mode = false;
+        recording_deleting_mode = false;
+        play_and_skip_buttons = false;
+        locked = false;
     }
 
     // -------- Timers --------
@@ -348,7 +380,6 @@ export component AppWindow inherits Window {
                     audio_playback = false;
                     input_recording = false;
                     input_playback = false;
-                    audio_or_input_playback = false;
                 }
             }
         }
@@ -364,12 +395,10 @@ export component AppWindow inherits Window {
             if skipping_allowed {
                 if skipped_while_input_playing {
                     input_playback = true;
-                    audio_or_input_playback = true;
                     play_pause();
                 }
                 if skipped_while_audio_playing {
                     audio_playback = true;
-                    audio_or_input_playback = true;
                     play_pause();
                 }
                 skipped_while_audio_playing = false;
@@ -856,7 +885,7 @@ export component AppWindow inherits Window {
 
                         if !recording_renaming_mode:
                         rename := BasicButton {
-                            enabled: !recording && !input_recording && !locked && !audio_playback && !input_playback;
+                            enabled: !recording && !input_recording && !locked && !audio_or_input_playback;
 
                             StatusImageSmall {
                                 source: @image-url("icons/rename.svg");
@@ -870,11 +899,8 @@ export component AppWindow inherits Window {
                             clicked => {
                                 recording_deleting_mode = false;
                                 recording_renaming_mode = !recording_renaming_mode;
-                                audio_playback = false;
-                                input_playback = false;
-                                audio_or_input_playback = false;
+                                set_playing_values(false, false);
                                 play_and_skip_buttons = false;
-                                sync_playing_with_ui();
                             }
                         }
 
@@ -985,7 +1011,7 @@ export component AppWindow inherits Window {
 
                         if !recording_deleting_mode:
                         trash := BasicButton {
-                            enabled: !recording && !input_recording && !locked && !audio_playback && !input_playback;
+                            enabled: !recording && !input_recording && !locked && !audio_or_input_playback;
 
                             StatusImageSmall {
                                 source: @image-url("icons/trash.svg");
@@ -999,11 +1025,8 @@ export component AppWindow inherits Window {
                             clicked => {
                                 recording_deleting_mode = !recording_deleting_mode;
                                 recording_renaming_mode = false;
-                                audio_playback = false;
-                                input_playback = false;
-                                audio_or_input_playback = false;
+                                set_playing_values(false, false);
                                 play_and_skip_buttons = false;
-                                sync_playing_with_ui();
                             }
                         }
 
@@ -1073,7 +1096,7 @@ export component AppWindow inherits Window {
                                             vertical-alignment: center;
                                             font-size: recording_renaming_mode || (deleted_recording_index == index && recording_deleted) || (new_recording && index == recording_names.length - 1) ? 1px : 12px;
                                             opacity: recording_renaming_mode || (deleted_recording_index == index && recording_deleted) || (new_recording && index == recording_names.length - 1) ? 0% : 100%;
-                                            color: locked || input_recording || input_playback ? #5d5d5d : #ffffff;
+                                            color: locked || input_recording || input_playback ? generic_disabled : white;
 
                                             animate font-size, opacity, color {
                                                 duration: 0.3s;
@@ -1147,7 +1170,7 @@ export component AppWindow inherits Window {
                         }
                     }
 
-                    snap_play := ShadowedButton {
+                    play_inputs := ShadowedButton {
                         enabled: play_and_skip_buttons && !audio_playback && playback_allowed;
                         min-width: 100px;
     
@@ -1158,7 +1181,7 @@ export component AppWindow inherits Window {
                             if input_playback:
                             StatusImageLarge {
                                 source: @image-url("icons/pause.svg");
-                                colorize: snap_play.enabled ? snap_colour : snap_disabled;
+                                colorize: play_inputs.enabled ? input_playback_colour : input_playback_disabled;
 
                                 animate colorize {
                                     duration: 0.1s;
@@ -1168,7 +1191,7 @@ export component AppWindow inherits Window {
                             if !input_playback:
                             StatusImageLarge {
                                 source: @image-url("icons/play.svg");
-                                colorize: snap_play.enabled ? snap_colour : snap_disabled;
+                                colorize: play_inputs.enabled ? input_playback_colour : input_playback_disabled;
 
                                 animate colorize {
                                     duration: 0.1s;
@@ -1177,17 +1200,7 @@ export component AppWindow inherits Window {
                         }
 
                         clicked => {
-                            input_playback = !input_playback;
-                            if input_playback {
-                                dial_values_when_locked = recording_values;
-                                audio_or_input_playback = true;
-                                locked = false;
-                            } else {
-                                playback_allowed = false;
-                                audio_or_input_playback = false;
-                                sync_current_dial_values_with_recording_values();
-                            }
-                            play_pause();
+                            set_playing_values(false, true);
                         }
                     }
 
@@ -1221,15 +1234,7 @@ export component AppWindow inherits Window {
                         }
 
                         clicked => {
-                            audio_playback = !audio_playback;
-                            if audio_playback {
-                                audio_or_input_playback = true;
-                                dial_values_when_locked = recording_values;
-                            } else {
-                                playback_allowed = false;
-                                audio_or_input_playback = false;
-                            }
-                            play_pause();
+                            set_playing_values(true, false);
                         }
                     }
 
@@ -1271,40 +1276,35 @@ export component AppWindow inherits Window {
                             if input_recording:
                             StatusImageLarge {
                                 source: @image-url("icons/stop-circle.svg");
-                                colorize: input_capturer.enabled ? snap_colour : snap_disabled;
+                                colorize: input_capturer.enabled ? input_playback_colour : input_playback_disabled;
                             }
 
                             if !input_recording:
                             StatusImageLarge {
                                 source: @image-url("icons/circle.svg");
-                                colorize: input_capturer.enabled ? snap_colour : snap_disabled;
+                                colorize: input_capturer.enabled ? input_playback_colour : input_playback_disabled;
                             }
                         }
     
                         clicked => {
                             input_recording = !input_recording;
                             if input_recording {
-                                dial_values_when_locked = recording_values;
-                                play_and_skip_buttons = false;
+                                disable_buttons_on_record();
                                 input_playback = true;
-                                locked = false;
                                 play_pause();
                             } else {
                                 current_dial_values = dial_values_when_locked[current_recording];
                                 save_dial_edits();
                                 play_and_skip_buttons = true;
                                 input_playback = false;
-                                audio_playback = false;
                                 play_pause();
                             }
                             input_recording_timeout = true;
-                            recording_renaming_mode = false;
-                            recording_deleting_mode = false;
                         }
                     }
 
                     recorder := ShadowedButton {
-                        enabled: !input_recording && !audio_or_input_playback && !input_playback && !audio_playback && !recording_timeout;
+                        enabled: !input_recording && !audio_or_input_playback && !recording_timeout;
         
                         HorizontalLayout {
                             padding: 12px;
@@ -1325,24 +1325,14 @@ export component AppWindow inherits Window {
     
                         clicked => {
                             recording = !recording;
-                            recording_deleting_mode = false;
-                            recording_renaming_mode = false;
                             if recording {
-                                audio_playback = false;
-                                audio_or_input_playback = false;
-                                play_and_skip_buttons = false;
-                                locked = false;
+                                disable_buttons_on_record();
                             } else {
                                 play_and_skip_buttons = true;
-                                audio_playback = false;
-                                audio_or_input_playback = false;
                                 new_recording = true;
                             }
                             recording_timeout = true;
                             record();
-                            if audio_playback || input_playback {
-                                sync_playing_with_ui();
-                            }
                         }
                     }
                 }

@@ -1129,7 +1129,7 @@ fn main() -> Result<(), Box<dyn STDError>> {
 
             let file = String::from(ui.get_recording_names().row_data(ui.get_current_recording() as usize).unwrap());
 
-            if ui.get_audio_playback() || ui.get_input_playback() {
+            if ui.get_audio_or_input_playback() {
 
                 let values = settings.read().unwrap();
                 let snapshot = if ui.get_input_recording() {
@@ -1182,7 +1182,7 @@ fn main() -> Result<(), Box<dyn STDError>> {
         move || {
             let ui = ui_handle.unwrap();
  
-            Tracker::set_playing(playing_ref_count.clone(), if ui.get_audio_playback() || ui.get_input_playback() {
+            Tracker::set_playing(playing_ref_count.clone(), if ui.get_audio_or_input_playback() {
                 true
             } else {
                 let settings = settings_ref_count.read().unwrap();
