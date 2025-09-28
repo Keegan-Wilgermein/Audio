@@ -12,93 +12,144 @@ component ShadowedRectangle inherits Rectangle {
     drop-shadow-offset-y: 6px;
 }
 
+// ---- Text ----
+component HeadingLarge inherits Text {
+    font-size: 16px;
+    font-weight: 700;
+}
+
+component HeadingSmall inherits Text {
+    font-size: 12px;
+    font-weight: 700;
+    overflow: elide;
+}
+
+component NormalText inherits Text {
+    font-size: 12px;
+    font-weight: 300;
+    overflow: elide;
+}
+
+// ---- Images ----
+component StatusImageSmall inherits Image {
+    width: 16px;
+    height: 16px;
+}
+
+component StatusImageLarge inherits Image {
+    width: 20px;
+    height: 20px;
+}
+
+// ---- Buttons ----
+component BasicButton inherits TouchArea {
+    mouse-cursor: self.enabled ? pointer : default;
+}
+
+component ShadowedButton inherits BasicButton {
+    ShadowedRectangle {
+    }
+}
+
 export component AppWindow inherits Window {
-    // Window setup and settings
+    // Window setup
     title: "audio";
+    background: background_default_colour;
 
     // -------- Variables --------
-    private property <[[string]]> dials: [["Sub Bass", "Bass", "Low Mids"], ["High Mids", "Treble", "Pan"]];
-    out property <bool> dials_edited: false;
-
     in-out property <bool> started: true;
-
+    private property <bool> should_delete: false;
+    in-out property <bool> can_delete: true;
+    
+    // ---- Dials ----
+    private property <[[string]]> dial_names: [["Sub Bass", "Bass", "Low Mids"], ["High Mids", "Treble", "Pan"]];
+    // Values and edits
+    in-out property <[int]> current_dial_values: [0, 0, 0, 0, 0, 0];
+    private property <[int]> previous_dial_values: [0, 0, 0, 0, 0, 0];
+    private property <[[int]]> dial_values_when_locked: [[0, 0, 0, 0, 0, 0]];
+    out property <bool> dials_edited: false;
+    // input_recording
+    private property <length> snap_by: 10px;
+    private property <length> next_dial_snap_position: snap_by;
+    private property <length> previous_dial_snap_position: snap_by - snap_by;
+    private property <length> dial_pressed_position: 0px;
+    
+    // ---- Presets ----
     in-out property <[string]> preset_names: [];
     in-out property <[[int]]> preset_values: [];
-    out property <bool> new_preset: false;
-    out property <bool> delete_preset: false;
-    out property <int> deleted_preset: 0;
-    out property <bool> rename_preset: false;
-
+    // Creating
+    out property <bool> new_preset_created: false;
+    // Renaming
+    private property <bool> preset_renaming_mode: false;
+    out property <bool> preset_renamed: false;
+    // Deleting
+    private property <bool> preset_deleting_mode: false;
+    out property <bool> preset_deleted: false;
+    out property <int> deleted_preset_index: 0;
+    
+    // ---- Recordings ----
     in-out property <[string]> recording_names: [];
     in-out property <[[int]]> recording_values: [];
     out property <int> current_recording: 0;
-    out property <bool> delete_recording: false;
-    in-out property <string> deleted_recording_value: "";
-    out property <int> deleted_recording: 0;
-    in-out property <bool> new_recording: false;
-    out property <bool> renamed_recording: false;
-
-    in-out property <[int]> dial_values: [0, 0, 0, 0, 0, 0];
-    private property <[int]> last_edit: [0, 0, 0, 0, 0, 0];
-    private property <[[int]]> backup: [[0, 0, 0, 0, 0, 0]];
-
-    in-out property <bool> playing: false;
-    private property <bool> button_playing: false;
+    // Renaming
+    private property <bool> recording_renaming_mode: false;
+    out property <bool> recording_renamed: false;
+    // Deleting
+    private property <bool> recording_deleting_mode: false;
+    out property <bool> recording_deleted: false;
+    out property <int> deleted_recording_index: 0;
+    in-out property <string> deleted_recording_name: "";
+    
+    // ---- Playback ----
+    private property <bool> audio_or_input_playback: false;
+    private property <bool> play_and_skip_buttons: true;
+    private property <bool> playback_allowed: true;
+    in-out property <bool> locked: false;
+    private property <bool> looping: false;
+    private property <bool> auto_skip_next: true;
+    
+    // ---- Audio playback ----
+    in-out property <bool> audio_playback: false;
+    in-out property <bool> synced_with_backend_playing_value: false;
+    
+    // ---- Audio recording ----
     in-out property <bool> recording: false;
-    in-out property <bool> snapping: false;
-    in-out property <bool> snap_playing: false;
+    in-out property <bool> new_recording: false;
+    private property <bool> recording_timeout: false;
+    in-out property <int> new_recording_index: 0;
 
-    private property <length> snap_by: 10px;
-    private property <length> next_snap: snap_by;
-    private property <length> last_snap: snap_by - snap_by;
-    private property <length> dial_pressed: 0px;
+    // ---- Input playback ----
+    in-out property <bool> input_playback: false;
+    
+    // ---- Input recording ----
+    in-out property <bool> input_recording: false;
+    private property <bool> input_recording_timeout: false;
 
-    private property <bool> deleting_preset: false;
-    private property <bool> renaming_preset: false;
-    private property <bool> deleting_recording: false;
-    private property <bool> renaming_recording: false;
+    // ---- Skipping ----
+    private property <bool> skipped_while_audio_playing: false;
+    private property <bool> skipped_while_input_playing: false;
+    in-out property <bool> skipping_allowed: false;
+    private property <bool> skipping: false;
 
+    // ---- Errors ----
     in-out property <string> error_notification: "";
     in-out property <bool> error-recieved: false;
 
-    private property <bool> control_buttons: true;
-
-    private property <bool> playing_skip: false;
-    private property <bool> snap_skip: false;
-    in-out property <bool> can_skip: false;
-    in-out property <bool> skipping: false;
-
-    in-out property <bool> backend_synced: false;
-    in-out property <bool> should_update_dials: false;
-
-    private property <bool> should_delete: false;
-    in-out property <bool> can_delete: true;
-
-    private property <bool> short: false;
-    private property <bool> short_snap: false;
-    in-out property <bool> can_play: true;
-
-    in-out property <bool> locked: false;
-    in-out property <bool> loop: false;
-    in-out property <bool> auto_skip: true;
-
-    in-out property <int> new_recording_index: 0;
-
-    // -------- Colour palette --------
+    // ---- Colour palette ----
     private property <color> transparent_colour: #24242400;
-    private property <color> background_default: #242424;
-    private property <color> drop_shadow_default: #151515;
-    private property <brush> recording_border_default: @linear-gradient(90deg, #ffffff 10%, #ffffff00 90%);
-    private property <color> text_default: #ffffff;
-    private property <color> text_disabled: #5d5d5d;
-    private property <color> audio_record_default: #ec4747;
-    private property <color> audio_record_disabled: #912e2e;
-    private property <color> snap_default: #479cec;
+    private property <color> background_default_colour: #242424;
+    private property <color> drop_shadow_default_colour: #151515;
+    private property <brush> recording_border_colour: @linear-gradient(90deg, #ffffff 10%, #ffffff00 90%);
+    private property <color> white: #ffffff;
+    private property <color> generic_disabled: #5d5d5d;
+    private property <color> play_and_record_colour: #ec4747;
+    private property <color> play_and_record_disabled: #912e2e;
+    private property <color> snap_colour: #479cec;
     private property <color> snap_disabled: #244c72;
     private property <brush> rename_colour: @linear-gradient(90deg, #3f51b5 30%, transparent_colour 100%);
     private property <brush> delete_colour: @linear-gradient(90deg, #dc4242 30%, transparent_colour 100%);
     private property <color> error_colour: #dc4242;
-    private property <color> highlight_default: #3e3e3e;
+    private property <color> highlight_colour: #3e3e3e;
 
     // -------- Callbacks --------
     callback update();
@@ -111,22 +162,28 @@ export component AppWindow inherits Window {
     callback snapshot_dial_update();
 
     // -------- Functions --------
-    function sync_dial_values_with_recording_values() {
-        dial_values[0] = recording_values[current_recording][0];
-        dial_values[1] = recording_values[current_recording][1];
-        dial_values[2] = recording_values[current_recording][2];
-        dial_values[3] = recording_values[current_recording][3];
-        dial_values[4] = recording_values[current_recording][4];
-        dial_values[5] = recording_values[current_recording][5];
+    function sync_current_dial_values_with_recording_values() {
+        current_dial_values[0] = recording_values[current_recording][0];
+        current_dial_values[1] = recording_values[current_recording][1];
+        current_dial_values[2] = recording_values[current_recording][2];
+        current_dial_values[3] = recording_values[current_recording][3];
+        current_dial_values[4] = recording_values[current_recording][4];
+        current_dial_values[5] = recording_values[current_recording][5];
     }
 
     function sync_dial_values_with_backup_values() {
-        dial_values[0] = backup[current_recording][0];
-        dial_values[1] = backup[current_recording][1];
-        dial_values[2] = backup[current_recording][2];
-        dial_values[3] = backup[current_recording][3];
-        dial_values[4] = backup[current_recording][4];
-        dial_values[5] = backup[current_recording][5];
+        current_dial_values[0] = dial_values_when_locked[current_recording][0];
+        current_dial_values[1] = dial_values_when_locked[current_recording][1];
+        current_dial_values[2] = dial_values_when_locked[current_recording][2];
+        current_dial_values[3] = dial_values_when_locked[current_recording][3];
+        current_dial_values[4] = dial_values_when_locked[current_recording][4];
+        current_dial_values[5] = dial_values_when_locked[current_recording][5];
+    }
+
+    function save_dial_edits() {
+        dials_edited = true;
+        save();
+        dials_edited = false;
     }
 
     // -------- Timers --------
@@ -139,29 +196,29 @@ export component AppWindow inherits Window {
             self.running = false;
             update();
             started = false;
-            sync_dial_values_with_recording_values();
+            sync_current_dial_values_with_recording_values();
         }
     }
 
     // Delays preset save until animation is finished
     Timer {
         interval: 0.5s;
-        running: rename_preset;
+        running: preset_renamed;
 
         triggered => {
             save();
-            rename_preset = false;
+            preset_renamed = false;
         }
     }
 
     // Delays recording save until animation is finished
     Timer {
         interval: 0.5s;
-        running: renamed_recording;
+        running: recording_renamed;
 
         triggered => {
             save();
-            renamed_recording = false;
+            recording_renamed = false;
         }
     }
 
@@ -176,40 +233,40 @@ export component AppWindow inherits Window {
         }
     }
 
-    // Re-enable the recording button after a short period
+    // Re-enable the recording button after a recording_timeout period
     Timer {
         interval: 1s;
-        running: short;
+        running: recording_timeout;
 
         triggered => {
-            short = false;
+            recording_timeout = false;
         }
     }
 
-    // Re-enable the input listener button after a short period
+    // Re-enable the input listener button after a recording_timeout period
     Timer {
         interval: 1s;
-        running: short_snap;
+        running: input_recording_timeout;
 
         triggered => {
-            short_snap = false;
+            input_recording_timeout = false;
         }
     }
 
-    // Re-enable the play buttons after a short period
+    // Re-enable the play buttons after a recording_timeout period
     Timer {
         interval: 0.5s;
-        running: !can_play;
+        running: !playback_allowed;
 
         triggered => {
-            can_play = true;
+            playback_allowed = true;
         }
     }
 
     // Periodically check for file changes
     Timer {
         interval: 5s;
-        running: !renaming_recording && !renaming_preset && !recording && !button_playing && !snapping && !deleting_recording && !deleting_preset;
+        running: !recording_renaming_mode && !preset_renaming_mode && !recording && !audio_or_input_playback && !input_recording && !recording_deleting_mode && !preset_deleting_mode;
 
         triggered => {
             started = true;
@@ -220,27 +277,25 @@ export component AppWindow inherits Window {
 
     // 10ms interval for updating frames
     // Also checks to see if the audio has finished so it can update the ui
-    // Also handles auto skipping and looping
+    // Also handles auto skipping and loopinging
     Timer {
         interval: 10ms;
-        running: snap_playing || snapping || playing;
+        running: input_playback || input_recording || audio_playback;
 
         triggered => {
-            if snap_playing && !snapping {
+            if input_playback && !input_recording {
                 snapshot_dial_update();
             }
             sync_playing_with_backend();
-            if backend_synced {
-                control_buttons = true;
-                backend_synced = false;
-                if snap_playing || snapping {
+            if synced_with_backend_playing_value {
+                play_and_skip_buttons = true;
+                synced_with_backend_playing_value = false;
+                if input_playback || input_recording {
                     sync_dial_values_with_backup_values();
-                    dials_edited = true;
-                    save();
-                    dials_edited = false;
+                    save_dial_edits();
                 }
 
-                if auto_skip {
+                if auto_skip_next {
                     if current_recording < recording_names.length - 1 {
                         current_recording += 1;
                     } else {
@@ -249,40 +304,40 @@ export component AppWindow inherits Window {
                     sync_dial_values_with_backup_values();
 
                     play_pause();
-                } else if loop {
+                } else if looping {
                     play_pause();
                 } else {
-                    playing = false;
-                    snapping = false;
-                    snap_playing = false;
-                    button_playing = false;
+                    audio_playback = false;
+                    input_recording = false;
+                    input_playback = false;
+                    audio_or_input_playback = false;
                 }
             }
         }
     }
 
-    // Pause to give time for audio to pause before playing the next one
+    // Pause to give time for audio to pause before audio_playback the next one
     // Also checks with backend to make sure it has finished pausing
     Timer {
-        running: playing_skip || snap_skip;
+        running: skipped_while_audio_playing || skipped_while_input_playing;
         interval: 50ms;
 
         triggered => {
-            if can_skip {
-                if snap_skip {
-                    snap_playing = true;
-                    button_playing = true;
+            if skipping_allowed {
+                if skipped_while_input_playing {
+                    input_playback = true;
+                    audio_or_input_playback = true;
                     play_pause();
                 }
-                if playing_skip {
-                    playing = true;
-                    button_playing = true;
+                if skipped_while_audio_playing {
+                    audio_playback = true;
+                    audio_or_input_playback = true;
                     play_pause();
                 }
-                playing_skip = false;
-                snap_skip = false;
+                skipped_while_audio_playing = false;
+                skipped_while_input_playing = false;
                 skipping = false;
-                can_skip = false;
+                skipping_allowed = false;
             }
         }
     }
@@ -294,25 +349,25 @@ export component AppWindow inherits Window {
 
         triggered => {
             should_delete = false;
-            if delete_recording {
+            if recording_deleted {
                 delete_recordings();
                 current_recording = 0;
-            } else if delete_preset {
+            } else if preset_deleted {
                 save();
             }
-            delete_recording = false;
-            delete_preset = false;
+            recording_deleted = false;
+            preset_deleted = false;
         }
     }
 
     // IDK, there's no delay but it doesn't work otherwise
     Timer {
         interval: 0s;
-        running: new_preset || new_recording;
+        running: new_preset_created || new_recording;
 
         triggered => {
-            if new_preset {
-                new_preset = false;
+            if new_preset_created {
+                new_preset_created = false;
             } else if new_recording {
                 new_recording = false;
             }
@@ -328,7 +383,7 @@ export component AppWindow inherits Window {
         VerticalLayout {
             spacing: 12px;
             
-            for group[index] in dials:
+            for group[index] in dial_names:
             HorizontalLayout {
                 spacing: 12px;
 
@@ -340,21 +395,21 @@ export component AppWindow inherits Window {
                         spacing: 12px;
                         alignment: center;
     
-                        Text {
+                        HeadingSmall {
                             text: dial;
-                            font-weight: 700;
-                            vertical-alignment: center;
                             horizontal-alignment: center;
+                            vertical-alignment: center;
                         }
 
                         HorizontalLayout {
                             alignment: center;
 
                             TouchArea {
-                                mouse-cursor: (!recording && !snap_playing) || snapping ? ew-resize : default;
+                                mouse-cursor: self.enabled ? ew-resize : default;
+                                enabled: rotator.enabled;
 
                                 rotator := SwipeGestureHandler {
-                                    enabled: (!recording && !snap_playing) || snapping;
+                                    enabled: (!recording && !input_playback) || input_recording;
 
                                     ShadowedRectangle {
                                         border-width: 2px;
@@ -370,8 +425,8 @@ export component AppWindow inherits Window {
                                                 source: @image-url("icons/dial.svg");
                                                 height: 40px;
                                                 width: 60px;
-                                                rotation-angle: dial_values[index2 + (index * 3)] * 20deg;
-                                                colorize: rotator.enabled ? text_default : text_disabled;
+                                                rotation-angle: current_dial_values[index2 + (index * 3)] * 20deg;
+                                                colorize: rotator.enabled ? white : generic_disabled;
 
                                                 animate colorize {
                                                     duration: 0.1s;
@@ -381,38 +436,36 @@ export component AppWindow inherits Window {
                                     }
 
                                     moved => {
-                                        if dial_pressed != self.pressed-position.x {
-                                            next_snap = snap_by;
-                                            last_snap = snap_by - snap_by;
-                                            dial_pressed = self.pressed-position.x;
+                                        if dial_pressed_position != self.pressed-position.x {
+                                            next_dial_snap_position = snap_by;
+                                            previous_dial_snap_position = snap_by - snap_by;
+                                            dial_pressed_position = self.pressed-position.x;
                                         }
-                                        if self.current-position.x - self.pressed-position.x > next_snap {
-                                            last_edit = recording_values[current_recording];
-                                            if dial_values[index2 + (index * 3)] < 7 {
-                                                dial_values[index2 + (index * 3)] += 1;
-                                                last_snap = next_snap;
-                                                next_snap += snap_by;
+                                        if self.current-position.x - self.pressed-position.x > next_dial_snap_position {
+                                            previous_dial_values = current_dial_values;
+                                            if current_dial_values[index2 + (index * 3)] < 7 {
+                                                current_dial_values[index2 + (index * 3)] += 1;
+                                                previous_dial_snap_position = next_dial_snap_position;
+                                                next_dial_snap_position += snap_by;
                                             }
-                                        } else if self.current-position.x - self.pressed-position.x < last_snap {
-                                            last_edit = recording_values[current_recording];
-                                            if dial_values[index2 + (index * 3)] > -7 {
-                                                dial_values[index2 + (index * 3)] -= 1;
-                                                next_snap = last_snap;
-                                                last_snap -= snap_by;
+                                        } else if self.current-position.x - self.pressed-position.x < previous_dial_snap_position {
+                                            previous_dial_values = current_dial_values;
+                                            if current_dial_values[index2 + (index * 3)] > -7 {
+                                                current_dial_values[index2 + (index * 3)] -= 1;
+                                                next_dial_snap_position = previous_dial_snap_position;
+                                                previous_dial_snap_position -= snap_by;
                                             }
                                         }
-                                        dials_edited = true;
-                                        save();
-                                        dials_edited = false;
+                                        save_dial_edits();
                                     }
                                 }
                             }
                         }
     
-                        Text {
-                            text: dial_values[index2 + (index * 3)];
-                            vertical-alignment: center;
+                        NormalText {
+                            text: current_dial_values[index2 + (index * 3)];
                             horizontal-alignment: center;
+                            vertical-alignment: center;
                         }
                     }
                 }
@@ -434,22 +487,17 @@ export component AppWindow inherits Window {
                         alignment: start;
                         spacing: 8px;
 
-                        Text {
+                        HeadingLarge {
                             text: "Presets";
-                            font-size: 16px;
-                            font-weight: 700;
                             vertical-alignment: center;
                         }
 
-                        add := TouchArea {
-                            mouse-cursor: pointer;
+                        add := BasicButton {
                             enabled: !locked;
 
-                            Image {
+                            StatusImageLarge {
                                 source: @image-url("icons/plus.svg");
-                                width: 20px;
-                                height: 20px;
-                                colorize: add.enabled ? text_default : text_disabled;
+                                colorize: add.enabled ? white : generic_disabled;
 
                                 animate colorize {
                                     duration: 0.2s;
@@ -457,37 +505,32 @@ export component AppWindow inherits Window {
                             }
 
                             clicked => {
-                                new_preset = true;
+                                new_preset_created = true;
                                 save();
                             }
                         }
 
-                        if renaming_preset:
-                        TouchArea {
-                            mouse-cursor: pointer;
+                        if preset_renaming_mode:
+                        BasicButton {
 
-                            Image {
+                            StatusImageSmall {
                                 source: @image-url("icons/check.svg");
-                                width: 16px;
-                                height: 16px;
                             }
 
                             clicked => {
-                                renaming_preset = !renaming_preset;
-                                rename_preset = true;
+                                preset_renaming_mode = !preset_renaming_mode;
+                                preset_renamed = true;
                             }
                         }
 
-                        if !renaming_preset:
+                        if !preset_renaming_mode:
                         preset_rename := TouchArea {
                             mouse-cursor: pointer;
                             enabled: !locked;
 
-                            Image {
+                            StatusImageSmall {
                                 source: @image-url("icons/rename.svg");
-                                width: 16px;
-                                height: 16px;
-                                colorize: preset_rename.enabled ? text_default : text_disabled;
+                                colorize: preset_rename.enabled ? white : generic_disabled;
 
                                 animate colorize {
                                     duration: 0.2s;
@@ -495,36 +538,30 @@ export component AppWindow inherits Window {
                             }
 
                             clicked => {
-                                deleting_preset = false;
-                                renaming_preset = !renaming_preset;
+                                preset_deleting_mode = false;
+                                preset_renaming_mode = !preset_renaming_mode;
                             }
                         }
 
-                        if deleting_preset:
-                        TouchArea {
-                            mouse-cursor: pointer;
+                        if preset_deleting_mode:
+                        BasicButton {
 
-                            Image {
+                            StatusImageSmall {
                                 source: @image-url("icons/check.svg");
-                                width: 16px;
-                                height: 16px;
                             }
 
                             clicked => {
-                                deleting_preset = !deleting_preset;
+                                preset_deleting_mode = !preset_deleting_mode;
                             }
                         }
 
-                        if !deleting_preset:
-                        preset_delete := TouchArea {
-                            mouse-cursor: pointer;
+                        if !preset_deleting_mode:
+                        preset_delete := BasicButton {
                             enabled: !locked;
 
-                            Image {
+                            StatusImageSmall {
                                 source: @image-url("icons/trash.svg");
-                                width: 16px;
-                                height: 16px;
-                                colorize: preset_delete.enabled ? text_default : text_disabled;
+                                colorize: preset_delete.enabled ? white : generic_disabled;
 
                                 animate colorize {
                                     duration: 0.2s;
@@ -532,8 +569,8 @@ export component AppWindow inherits Window {
                             }
 
                             clicked => {
-                                renaming_preset = false;
-                                deleting_preset = !deleting_preset;
+                                preset_renaming_mode = false;
+                                preset_deleting_mode = !preset_deleting_mode;
                             }
                         }
                     }
@@ -543,7 +580,7 @@ export component AppWindow inherits Window {
                         
                         VerticalLayout {
                             alignment: start;
-                            spacing: deleting_preset && delete_preset ? 0px : renaming_preset ? 8px : 16px;
+                            spacing: preset_deleting_mode && preset_deleted ? 0px : preset_renaming_mode ? 8px : 16px;
 
                             animate spacing {
                                 duration: 0.3s;
@@ -562,9 +599,8 @@ export component AppWindow inherits Window {
                                     alignment: start;
                                     spacing: 16px;
 
-                                    reset := TouchArea {
-                                        mouse-cursor: pointer;
-                                        enabled: (!renaming_preset && !deleting_preset && !snap_playing && can_delete) || snapping;
+                                    reset := BasicButton {
+                                        enabled: (!preset_renaming_mode && !preset_deleting_mode && !input_playback && can_delete) || input_recording;
         
                                         Rectangle {
                                             border-radius: 8px;
@@ -574,17 +610,14 @@ export component AppWindow inherits Window {
                                                 spacing: 4px;
                                                 alignment: start;
                     
-                                                Text {
-                                                    text: deleting_preset ? "Can't delete preset" : renaming_preset ? "Can't rename preset" : "Reset";
-                                                    font-weight: 700;
-                                                    overflow: elide;
+                                                HeadingSmall {
+                                                    text: preset_deleting_mode ? "Can't delete preset" : preset_renaming_mode ? "Can't rename preset" : "Reset";
                                                 }
                         
-                                                Text {
+                                                NormalText {
                                                     text: "0  0  0  0  0  0";
-                                                    overflow: elide;
                                                     vertical-alignment: center;
-                                                    color: reset.enabled ? text_default : text_disabled;
+                                                    color: reset.enabled ? white : generic_disabled;
         
                                                     animate color {
                                                         duration: 0.2s;
@@ -594,17 +627,13 @@ export component AppWindow inherits Window {
                                         }
         
                                         clicked => {
-                                            last_edit = recording_values[current_recording];
-                                            dial_values = [0, 0, 0, 0, 0, 0];
-                                            dials_edited = true;
-                                            save();
-                                            dials_edited = false;
+                                            current_dial_values = [0, 0, 0, 0, 0, 0];
+                                            save_dial_edits();
                                         }
                                     }
     
-                                    last := TouchArea {
-                                        mouse-cursor: pointer;
-                                        enabled: (!renaming_preset && !deleting_preset && !snap_playing && can_delete) || snapping;
+                                    last := BasicButton {
+                                        enabled: (!preset_renaming_mode && !preset_deleting_mode && !input_playback && can_delete) || input_recording;
         
                                         Rectangle {
                                             border-radius: 8px;
@@ -614,17 +643,14 @@ export component AppWindow inherits Window {
                                                 spacing: 4px;
                                                 alignment: start;
                     
-                                                Text {
-                                                    text: deleting_preset ? "Can't delete preset" : renaming_preset ? "Can't rename preset" : "Last edit";
-                                                    font-weight: 700;
-                                                    overflow: elide;
+                                                HeadingSmall {
+                                                    text: preset_deleting_mode ? "Can't delete preset" : preset_renaming_mode ? "Can't rename preset" : "Last dial edit";
                                                 }
                         
-                                                Text {
-                                                    text: "\{last_edit[0]}  \{last_edit[1]}  \{last_edit[2]}  \{last_edit[3]}  \{last_edit[4]}  \{last_edit[5]}";
-                                                    overflow: elide;
+                                                NormalText {
+                                                    text: "\{previous_dial_values[0]}  \{previous_dial_values[1]}  \{previous_dial_values[2]}  \{previous_dial_values[3]}  \{previous_dial_values[4]}  \{previous_dial_values[5]}";
                                                     vertical-alignment: center;
-                                                    color: last.enabled ? text_default : text_disabled;
+                                                    color: last.enabled ? white : generic_disabled;
         
                                                     animate color {
                                                         duration: 0.2s;
@@ -634,21 +660,13 @@ export component AppWindow inherits Window {
                                         }
         
                                         clicked => {
-                                            dial_values[0] = last_edit[0];
-                                            dial_values[1] = last_edit[1];
-                                            dial_values[2] = last_edit[2];
-                                            dial_values[3] = last_edit[3];
-                                            dial_values[4] = last_edit[4];
-                                            dial_values[5] = last_edit[5];
-                                            dials_edited = true;
-                                            save();
-                                            dials_edited = false;
+                                            current_dial_values = previous_dial_values;
+                                            save_dial_edits();
                                         }
                                     }
                                 }
     
-                                TouchArea {
-                                    mouse-cursor: pointer;
+                                BasicButton {
                                     enabled: locked;
     
                                     Rectangle {
@@ -663,10 +681,8 @@ export component AppWindow inherits Window {
                                                 duration: 0.3s;
                                             }
                 
-                                            Text {
+                                            HeadingSmall {
                                                 text: "Restore values";
-                                                font-weight: 700;
-                                                overflow: elide;
                                                 font-size: !locked ? 1px : 12px;
                                                 opacity: !locked ? 0% : 100%;
     
@@ -676,9 +692,8 @@ export component AppWindow inherits Window {
                                                 }
                                             }
                     
-                                            Text {
-                                                text: "\{backup[current_recording][0]}  \{backup[current_recording][1]}  \{backup[current_recording][2]}  \{backup[current_recording][3]}  \{backup[current_recording][4]}  \{backup[current_recording][5]}";
-                                                overflow: elide;
+                                            NormalText {
+                                                text: "\{dial_values_when_locked[current_recording][0]}  \{dial_values_when_locked[current_recording][1]}  \{dial_values_when_locked[current_recording][2]}  \{dial_values_when_locked[current_recording][3]}  \{dial_values_when_locked[current_recording][4]}  \{dial_values_when_locked[current_recording][5]}";
                                                 vertical-alignment: center;
                                                 font-size: !locked ? 1px : 12px;
                                                 opacity: !locked ? 0% : 100%;
@@ -692,31 +707,27 @@ export component AppWindow inherits Window {
                                     }
     
                                     clicked => {
-                                        last_edit = recording_values[current_recording];
                                         sync_dial_values_with_backup_values();
-                                        dials_edited = true;
-                                        save();
-                                        dials_edited = false;
+                                        save_dial_edits();
                                     }
                                 }
                             }
 
                             for preset[index] in preset_values:
-                            TouchArea {
-                                mouse-cursor: pointer;
-                                enabled: (!renaming_preset && !snap_playing) || snapping;
+                            BasicButton {
+                                enabled: (!preset_renaming_mode && !input_playback) || input_recording;
 
                                 Rectangle {
                                     border-radius: 8px;
-                                    background: deleted_preset == index && delete_preset ? transparent_colour : deleting_preset ? delete_colour : renaming_preset ? rename_colour : transparent_colour;
+                                    background: deleted_preset_index == index && preset_deleted ? transparent_colour : preset_deleting_mode ? delete_colour : preset_renaming_mode ? rename_colour : transparent_colour;
 
                                     animate background {
                                         duration: 0.2s;
                                     }
 
                                     VerticalLayout {
-                                        padding: deleted_preset == index && delete_preset ? 0px : deleting_preset || renaming_preset ? 8px: 0px;
-                                        spacing: renaming_preset || (deleted_preset == index && delete_preset) ? 0px : 4px;
+                                        padding: deleted_preset_index == index && preset_deleted ? 0px : preset_deleting_mode || preset_renaming_mode ? 8px: 0px;
+                                        spacing: preset_renaming_mode || (deleted_preset_index == index && preset_deleted) ? 0px : 4px;
                                         alignment: start;
 
                                         animate padding, spacing {
@@ -724,7 +735,7 @@ export component AppWindow inherits Window {
                                             easing: ease-in-out-back;
                                         }
 
-                                        if renaming_preset:
+                                        if preset_renaming_mode:
                                         TextInput {
                                             text: preset_names[index];
                                             font-weight: 700;
@@ -734,13 +745,11 @@ export component AppWindow inherits Window {
                                             }
                                         }
             
-                                        if !renaming_preset:
-                                        Text {
+                                        if !preset_renaming_mode:
+                                        HeadingSmall {
                                             text: preset_names[index];
-                                            font-weight: 700;
-                                            overflow: elide;
-                                            font-size: (deleted_preset == index && delete_preset) || (new_preset && index == preset_names.length - 1) ? 1px : 12px;
-                                            opacity: (deleted_preset == index && delete_preset) || (new_preset && index == preset_names.length - 1) ? 0% : 100%;
+                                            font-size: (deleted_preset_index == index && preset_deleted) || (new_preset_created && index == preset_names.length - 1) ? 1px : 12px;
+                                            opacity: (deleted_preset_index == index && preset_deleted) || (new_preset_created && index == preset_names.length - 1) ? 0% : 100%;
 
                                             animate font-size, opacity {
                                                 duration: 0.3s;
@@ -748,12 +757,11 @@ export component AppWindow inherits Window {
                                             }
                                         }
                 
-                                        Text {
+                                        NormalText {
                                             text: "\{preset[0]}  \{preset[1]}  \{preset[2]}  \{preset[3]}  \{preset[4]}  \{preset[5]}";
-                                            overflow: elide;
                                             vertical-alignment: center;
-                                            font-size: renaming_preset || (deleted_preset == index && delete_preset) || (new_preset && index == preset_names.length - 1) ? 1px : 12px;
-                                            opacity: renaming_preset || (deleted_preset == index && delete_preset) || (new_preset && index == preset_names.length - 1) ? 0% : 100%;
+                                            font-size: preset_renaming_mode || (deleted_preset_index == index && preset_deleted) || (new_preset_created && index == preset_names.length - 1) ? 1px : 12px;
+                                            opacity: preset_renaming_mode || (deleted_preset_index == index && preset_deleted) || (new_preset_created && index == preset_names.length - 1) ? 0% : 100%;
 
                                             animate font-size, opacity {
                                                 duration: 0.3s;
@@ -764,24 +772,16 @@ export component AppWindow inherits Window {
                                 }
 
                                 clicked => {
-                                    if deleting_preset {
+                                    if preset_deleting_mode {
                                         if can_delete {
                                             can_delete = false;
                                             should_delete = true;
-                                            deleted_preset = index;
-                                            delete_preset = true;
+                                            deleted_preset_index = index;
+                                            preset_deleted = true;
                                         }
                                     } else {
-                                        last_edit = recording_values[current_recording];
-                                        dial_values[0] = preset[0];
-                                        dial_values[1] = preset[1];
-                                        dial_values[2] = preset[2];
-                                        dial_values[3] = preset[3];
-                                        dial_values[4] = preset[4];
-                                        dial_values[5] = preset[5];
-                                        dials_edited = true;
-                                        save();
-                                        dials_edited = false;
+                                        current_dial_values = preset;
+                                        save_dial_edits();
                                     }
                                 }
                             }
@@ -797,40 +797,32 @@ export component AppWindow inherits Window {
                         alignment: start;
                         spacing: 8px;
                         
-                        Text {
+                        HeadingLarge {
                             text: "Recordings";
-                            font-size: 16px;
-                            font-weight: 700;
                             vertical-alignment: center;
                         }
 
-                        if renaming_recording:
-                        TouchArea {
-                            mouse-cursor: pointer;
+                        if recording_renaming_mode:
+                        BasicButton {
 
-                            Image {
+                            StatusImageSmall {
                                 source: @image-url("icons/check.svg");
-                                width: 16px;
-                                height: 16px;
                             }
 
                             clicked => {
-                                renaming_recording = !renaming_recording;
-                                renamed_recording = true;
-                                control_buttons = true;
+                                recording_renaming_mode = !recording_renaming_mode;
+                                recording_renamed = true;
+                                play_and_skip_buttons = true;
                             }
                         }
 
-                        if !renaming_recording:
-                        rename := TouchArea {
-                            mouse-cursor: pointer;
-                            enabled: !recording && !snapping && !locked && !playing && !snap_playing;
+                        if !recording_renaming_mode:
+                        rename := BasicButton {
+                            enabled: !recording && !input_recording && !locked && !audio_playback && !input_playback;
 
-                            Image {
+                            StatusImageSmall {
                                 source: @image-url("icons/rename.svg");
-                                width: 16px;
-                                height: 16px;
-                                colorize: rename.enabled ? text_default : text_disabled;
+                                colorize: rename.enabled ? white : generic_disabled;
 
                                 animate colorize {
                                     duration: 0.2s;
@@ -838,32 +830,29 @@ export component AppWindow inherits Window {
                             }
 
                             clicked => {
-                                deleting_recording = false;
-                                renaming_recording = !renaming_recording;
-                                playing = false;
-                                snap_playing = false;
-                                button_playing = false;
-                                control_buttons = false;
+                                recording_deleting_mode = false;
+                                recording_renaming_mode = !recording_renaming_mode;
+                                audio_playback = false;
+                                input_playback = false;
+                                audio_or_input_playback = false;
+                                play_and_skip_buttons = false;
                                 sync_playing_with_ui();
                             }
                         }
 
-                        auto_next := TouchArea {
-                            mouse-cursor: pointer;
-                            enabled: !recording && !snapping;
+                        auto_next := BasicButton {
+                            enabled: !recording && !input_recording;
 
                             Rectangle {
-                                background: auto_skip ? highlight_default : transparent_colour;
+                                background: auto_skip_next ? highlight_colour : transparent_colour;
                                 border-radius: 4px;
 
                                 VerticalLayout {
                                     padding: 4px;
 
-                                    Image {
+                                    StatusImageSmall {
                                         source: @image-url("icons/skip-forward.svg");
-                                        width: 16px;
-                                        height: 16px;
-                                        colorize: auto_next.enabled ? text_default : text_disabled;
+                                        colorize: auto_next.enabled ? white : generic_disabled;
         
                                         animate colorize {
                                             duration: 0.2s;
@@ -873,27 +862,24 @@ export component AppWindow inherits Window {
                             }
 
                             clicked => {
-                                auto_skip = !auto_skip;
-                                loop = false;
+                                auto_skip_next = !auto_skip_next;
+                                looping = false;
                             }
                         }
 
-                        repeat := TouchArea {
-                            mouse-cursor: pointer;
-                            enabled: !recording && !snapping;
+                        repeat := BasicButton {
+                            enabled: !recording && !input_recording;
 
                             Rectangle {
-                                background: loop ? highlight_default : transparent_colour;
+                                background: looping ? highlight_colour : transparent_colour;
                                 border-radius: 4px;
 
                                 VerticalLayout {
                                     padding: 4px;
 
-                                    Image {
+                                    StatusImageSmall {
                                         source: @image-url("icons/repeat.svg");
-                                        width: 16px;
-                                        height: 16px;
-                                        colorize: repeat.enabled ? text_default : text_disabled;
+                                        colorize: repeat.enabled ? white : generic_disabled;
         
                                         animate colorize {
                                             duration: 0.2s;
@@ -903,21 +889,18 @@ export component AppWindow inherits Window {
                             }
 
                             clicked => {
-                                loop = !loop;
-                                auto_skip = false;
+                                looping = !looping;
+                                auto_skip_next = false;
                             }
                         }
 
                         if locked:
-                        lock := TouchArea {
-                            mouse-cursor: pointer;
-                            enabled: !recording && !snapping && !snap_playing;
+                        lock := BasicButton {
+                            enabled: !recording && !input_recording && !input_playback;
 
-                            Image {
+                            StatusImageSmall {
                                 source: @image-url("icons/lock.svg");
-                                width: 16px;
-                                height: 16px;
-                                colorize: lock.enabled ? text_default : text_disabled;
+                                colorize: lock.enabled ? white : generic_disabled;
 
                                 animate colorize {
                                     duration: 0.2s;
@@ -926,60 +909,49 @@ export component AppWindow inherits Window {
 
                             clicked => {
                                 locked = !locked;
-                                dials_edited = true;
-                                save();
-                                dials_edited = false;
+                                save_dial_edits();
                             }
                         }
 
                         if !locked:
-                        unlock := TouchArea {
-                            mouse-cursor: pointer;
-                            enabled: !recording && !snapping && !snap_playing;
+                        unlock := BasicButton {
+                            enabled: !recording && !input_recording && !input_playback;
 
-                            Image {
+                            StatusImageSmall {
                                 source: @image-url("icons/unlock.svg");
-                                width: 16px;
-                                height: 16px;
-                                colorize: unlock.enabled ? text_default : text_disabled;
+                                colorize: unlock.enabled ? white : generic_disabled;
                             }
 
                             clicked => {
                                 locked = !locked;
-                                backup = recording_values;
-                                renaming_preset = false;
-                                deleting_preset = false;
-                                renaming_recording = false;
-                                deleting_recording = false;
+                                dial_values_when_locked = recording_values;
+                                preset_renaming_mode = false;
+                                preset_deleting_mode = false;
+                                recording_renaming_mode = false;
+                                recording_deleting_mode = false;
                             }
                         }
 
-                        if deleting_recording:
-                        TouchArea {
-                            mouse-cursor: pointer;
+                        if recording_deleting_mode:
+                        BasicButton {
 
-                            Image {
+                            StatusImageSmall {
                                 source: @image-url("icons/check.svg");
-                                width: 16px;
-                                height: 16px;
                             }
 
                             clicked => {
-                                deleting_recording = !deleting_recording;
-                                control_buttons = true;
+                                recording_deleting_mode = !recording_deleting_mode;
+                                play_and_skip_buttons = true;
                             }
                         }
 
-                        if !deleting_recording:
-                        trash := TouchArea {
-                            mouse-cursor: pointer;
-                            enabled: !recording && !snapping && !locked && !playing && !snap_playing;
+                        if !recording_deleting_mode:
+                        trash := BasicButton {
+                            enabled: !recording && !input_recording && !locked && !audio_playback && !input_playback;
 
-                            Image {
+                            StatusImageSmall {
                                 source: @image-url("icons/trash.svg");
-                                width: 16px;
-                                height: 16px;
-                                colorize: trash.enabled ? text_default : text_disabled;
+                                colorize: trash.enabled ? white : generic_disabled;
 
                                 animate colorize {
                                     duration: 0.2s;
@@ -987,12 +959,12 @@ export component AppWindow inherits Window {
                             }
 
                             clicked => {
-                                deleting_recording = !deleting_recording;
-                                renaming_recording = false;
-                                playing = false;
-                                snap_playing = false;
-                                button_playing = false;
-                                control_buttons = false;
+                                recording_deleting_mode = !recording_deleting_mode;
+                                recording_renaming_mode = false;
+                                audio_playback = false;
+                                input_playback = false;
+                                audio_or_input_playback = false;
+                                play_and_skip_buttons = false;
                                 sync_playing_with_ui();
                             }
                         }
@@ -1005,7 +977,7 @@ export component AppWindow inherits Window {
 
                         VerticalLayout {
                             alignment: start;
-                            spacing: (deleting_recording && delete_recording) ? 0px : renaming_recording ? 8px : 16px;
+                            spacing: (recording_deleting_mode && recording_deleted) ? 0px : recording_renaming_mode ? 8px : 16px;
 
                             animate spacing {
                                 duration: 0.3s;
@@ -1013,23 +985,22 @@ export component AppWindow inherits Window {
                             }
 
                             for recording[index] in recording_values:
-                            TouchArea {
-                                mouse-cursor: pointer;
-                                enabled: !renaming_recording && !playing && !snap_playing && !button_playing && can_delete;
+                            BasicButton {
+                                enabled: !recording_renaming_mode && !audio_playback && !input_playback && !audio_or_input_playback && can_delete;
 
                                 Rectangle {
                                     border-radius: 8px;
                                     border-width: 1px;
-                                    border-color: current_recording == index && !deleting_recording && !renaming_recording && !(new_recording && index == recording_names.length - 1) ? recording_border_default : transparent_colour;
-                                    background: deleted_recording == index && delete_recording ? transparent_colour : deleting_recording ? delete_colour : renaming_recording ? rename_colour : transparent_colour;
+                                    border-color: current_recording == index && !recording_deleting_mode && !recording_renaming_mode && !(new_recording && index == recording_names.length - 1) ? recording_border_colour : transparent_colour;
+                                    background: deleted_recording_index == index && recording_deleted ? transparent_colour : recording_deleting_mode ? delete_colour : recording_renaming_mode ? rename_colour : transparent_colour;
                                     
                                     animate background, border-color {
                                         duration: 0.2s;
                                     }
                 
                                     VerticalLayout {
-                                        padding: deleted_recording == index && delete_recording ? 0px : deleting_recording || current_recording == index || renaming_recording ? 8px: 0px;
-                                        spacing: renaming_recording || (deleted_recording == index && delete_recording) || (new_recording && index == recording_names.length - 1) ? 0px : 4px;
+                                        padding: deleted_recording_index == index && recording_deleted ? 0px : recording_deleting_mode || current_recording == index || recording_renaming_mode ? 8px: 0px;
+                                        spacing: recording_renaming_mode || (deleted_recording_index == index && recording_deleted) || (new_recording && index == recording_names.length - 1) ? 0px : 4px;
                                         alignment: start;
 
                                         animate padding, spacing {
@@ -1037,7 +1008,7 @@ export component AppWindow inherits Window {
                                             easing: ease-in-out-back;
                                         }
 
-                                        if renaming_recording:
+                                        if recording_renaming_mode:
                                         TextInput {
                                             text: recording_names[index];
                                             font-weight: 700;
@@ -1047,13 +1018,11 @@ export component AppWindow inherits Window {
                                             }
                                         }
             
-                                        if !renaming_recording:
-                                        Text {
+                                        if !recording_renaming_mode:
+                                        HeadingSmall {
                                             text: recording_names[index];
-                                            font-weight: 700;
-                                            overflow: elide;
-                                            font-size: renaming_recording || (deleted_recording == index && delete_recording) || (new_recording && index == recording_names.length - 1) ? 1px : 12px;
-                                            opacity: renaming_recording || (deleted_recording == index && delete_recording) || (new_recording && index == recording_names.length - 1) ? 0% : 100%;
+                                            font-size: recording_renaming_mode || (deleted_recording_index == index && recording_deleted) || (new_recording && index == recording_names.length - 1) ? 1px : 12px;
+                                            opacity: recording_renaming_mode || (deleted_recording_index == index && recording_deleted) || (new_recording && index == recording_names.length - 1) ? 0% : 100%;
 
                                             animate font-size, opacity {
                                                 duration: 0.3s;
@@ -1061,13 +1030,12 @@ export component AppWindow inherits Window {
                                             }
                                         }
                 
-                                        Text {
-                                            text: snapping || locked ? "\{backup[index][0]}  \{backup[index][1]}  \{backup[index][2]}  \{backup[index][3]}  \{backup[index][4]}  \{backup[index][5]}" : "\{recording[0]}  \{recording[1]}  \{recording[2]}  \{recording[3]}  \{recording[4]}  \{recording[5]}";
-                                            overflow: elide;
+                                        NormalText {
+                                            text: input_recording || locked ? "\{dial_values_when_locked[index][0]}  \{dial_values_when_locked[index][1]}  \{dial_values_when_locked[index][2]}  \{dial_values_when_locked[index][3]}  \{dial_values_when_locked[index][4]}  \{dial_values_when_locked[index][5]}" : "\{recording[0]}  \{recording[1]}  \{recording[2]}  \{recording[3]}  \{recording[4]}  \{recording[5]}";
                                             vertical-alignment: center;
-                                            font-size: renaming_recording || (deleted_recording == index && delete_recording) || (new_recording && index == recording_names.length - 1) ? 1px : 12px;
-                                            opacity: renaming_recording || (deleted_recording == index && delete_recording) || (new_recording && index == recording_names.length - 1) ? 0% : 100%;
-                                            color: locked || snapping || snap_playing ? #5d5d5d : #ffffff;
+                                            font-size: recording_renaming_mode || (deleted_recording_index == index && recording_deleted) || (new_recording && index == recording_names.length - 1) ? 1px : 12px;
+                                            opacity: recording_renaming_mode || (deleted_recording_index == index && recording_deleted) || (new_recording && index == recording_names.length - 1) ? 0% : 100%;
+                                            color: locked || input_recording || input_playback ? #5d5d5d : #ffffff;
 
                                             animate font-size, opacity, color {
                                                 duration: 0.3s;
@@ -1078,15 +1046,15 @@ export component AppWindow inherits Window {
                                 }
 
                                 clicked => {
-                                    if deleting_recording {
+                                    if recording_deleting_mode {
                                         can_delete = false;
-                                        deleted_recording = index;
-                                        deleted_recording_value = recording_names[index];
-                                        delete_recording = true;
+                                        deleted_recording_index = index;
+                                        deleted_recording_name = recording_names[index];
+                                        recording_deleted = true;
                                         should_delete = true;
                                     } else {
                                         current_recording = index;
-                                        sync_dial_values_with_recording_values();
+                                        sync_current_dial_values_with_recording_values();
                                     }
                                 }
                             }
@@ -1104,10 +1072,9 @@ export component AppWindow inherits Window {
                 HorizontalLayout {
                     alignment: center;
 
-                    Text {
+                    HeadingSmall {
                         text: error_notification;
                         color: error_colour;
-                        font-weight: 700;
                     }
                 }
 
@@ -1115,209 +1082,181 @@ export component AppWindow inherits Window {
                 HorizontalLayout {
                     spacing: 12px;
 
-                    back := TouchArea {
-                        mouse-cursor: pointer;
-                        enabled: (playing || snap_playing) && (!recording || !snapping);
-
-                        ShadowedRectangle {
-                            min-width: 100px;
+                    back := ShadowedButton {
+                        enabled: (audio_playback || input_playback) && (!recording || !input_recording);
+                        min-width: 100px;
     
-                            HorizontalLayout {
-                                padding: 12px;
-                                alignment: center;
-    
-                                Image {
-                                    source: @image-url("icons/rewind.svg");
-                                    width: 20px;
-                                    height: 20px;
-                                    colorize: back.enabled ? text_default : text_disabled;
+                        HorizontalLayout {
+                            padding: 12px;
+                            alignment: center;
 
-                                    animate colorize {
-                                        duration: 0.1s;
-                                    }
+                            StatusImageLarge {
+                                source: @image-url("icons/rewind.svg");
+                                colorize: back.enabled ? white : generic_disabled;
+
+                                animate colorize {
+                                    duration: 0.1s;
                                 }
                             }
                         }
 
                         clicked => {
                             skipping = true;
-                            if snap_playing {
-                                snap_playing = false;
-                                button_playing = false;
+                            if input_playback {
+                                input_playback = false;
+                                audio_or_input_playback = false;
                                 play_pause();
                                 if current_recording > 0 {
                                     current_recording -= 1;
                                 } else {
                                     current_recording = recording_names.length - 1;
                                 }
-                                snap_skip = true;
+                                skipped_while_input_playing = true;
                             }
-                            if playing {
-                                playing = false;
-                                button_playing = false;
+                            if audio_playback {
+                                audio_playback = false;
+                                audio_or_input_playback = false;
                                 play_pause();
                                 if current_recording > 0 {
                                     current_recording -= 1;
                                 } else {
                                     current_recording = recording_names.length - 1;
                                 }
-                                playing_skip = true;
+                                skipped_while_audio_playing = true;
                             }
-                            sync_dial_values_with_recording_values();
+                            sync_current_dial_values_with_recording_values();
                         }
                     }
 
-                    snap_play := TouchArea {
-                        mouse-cursor: pointer;
-                        enabled: control_buttons && !playing && can_play;
-
-                        ShadowedRectangle {
-                            min-width: 100px;
+                    snap_play := ShadowedButton {
+                        enabled: play_and_skip_buttons && !audio_playback && playback_allowed;
+                        min-width: 100px;
     
-                            HorizontalLayout {
-                                padding: 12px;
-                                alignment: center;
-    
-                                if snap_playing:
-                                Image {
-                                    source: @image-url("icons/pause.svg");
-                                    width: 20px;
-                                    height: 20px;
-                                    colorize: snap_play.enabled ? snap_default : snap_disabled;
+                        HorizontalLayout {
+                            padding: 12px;
+                            alignment: center;
 
-                                    animate colorize {
-                                        duration: 0.1s;
-                                    }
+                            if input_playback:
+                            StatusImageLarge {
+                                source: @image-url("icons/pause.svg");
+                                colorize: snap_play.enabled ? snap_colour : snap_disabled;
+
+                                animate colorize {
+                                    duration: 0.1s;
                                 }
-        
-                                if !snap_playing:
-                                Image {
-                                    source: @image-url("icons/play.svg");
-                                    width: 20px;
-                                    height: 20px;
-                                    colorize: snap_play.enabled ? snap_default : snap_disabled;
+                            }
+    
+                            if !input_playback:
+                            StatusImageLarge {
+                                source: @image-url("icons/play.svg");
+                                colorize: snap_play.enabled ? snap_colour : snap_disabled;
 
-                                    animate colorize {
-                                        duration: 0.1s;
-                                    }
+                                animate colorize {
+                                    duration: 0.1s;
                                 }
                             }
                         }
 
                         clicked => {
-                            snap_playing = !snap_playing;
-                            if snap_playing {
-                                backup = recording_values;
-                                button_playing = true;
+                            input_playback = !input_playback;
+                            if input_playback {
+                                dial_values_when_locked = recording_values;
+                                audio_or_input_playback = true;
                                 locked = false;
                             } else {
-                                can_play = false;
-                                button_playing = false;
-                                sync_dial_values_with_recording_values();
+                                playback_allowed = false;
+                                audio_or_input_playback = false;
+                                sync_current_dial_values_with_recording_values();
                             }
                             play_pause();
                         }
                     }
 
-                    play := TouchArea {
-                        mouse-cursor: pointer;
-                        enabled: control_buttons && !snap_playing && can_play;
-
-                        ShadowedRectangle {
-                            min-width: 100px;
+                    play := ShadowedButton {
+                        enabled: play_and_skip_buttons && !input_playback && playback_allowed;
+                        min-width: 100px;
     
-                            HorizontalLayout {
-                                padding: 12px;
-                                alignment: center;
-    
-                                if playing:
-                                Image {
-                                    source: @image-url("icons/pause.svg");
-                                    width: 20px;
-                                    height: 20px;
-                                    colorize: play.enabled ? audio_record_default : audio_record_disabled;
+                        HorizontalLayout {
+                            padding: 12px;
+                            alignment: center;
 
-                                    animate colorize {
-                                        duration: 0.1s;
-                                    }
+                            if audio_playback:
+                            StatusImageLarge {
+                                source: @image-url("icons/pause.svg");
+                                colorize: play.enabled ? play_and_record_colour : play_and_record_disabled;
+
+                                animate colorize {
+                                    duration: 0.1s;
                                 }
-        
-                                if !playing:
-                                Image {
-                                    source: @image-url("icons/play.svg");
-                                    width: 20px;
-                                    height: 20px;
-                                    colorize: play.enabled ? audio_record_default : audio_record_disabled;
+                            }
+    
+                            if !audio_playback:
+                            StatusImageLarge {
+                                source: @image-url("icons/play.svg");
+                                colorize: play.enabled ? play_and_record_colour : play_and_record_disabled;
 
-                                    animate colorize {
-                                        duration: 0.1s;
-                                    }
+                                animate colorize {
+                                    duration: 0.1s;
                                 }
                             }
                         }
 
                         clicked => {
-                            playing = !playing;
-                            if playing {
-                                button_playing = true;
-                                backup = recording_values;
+                            audio_playback = !audio_playback;
+                            if audio_playback {
+                                audio_or_input_playback = true;
+                                dial_values_when_locked = recording_values;
                             } else {
-                                can_play = false;
-                                button_playing = false;
+                                playback_allowed = false;
+                                audio_or_input_playback = false;
                             }
                             play_pause();
                         }
                     }
 
-                    next := TouchArea {
-                        mouse-cursor: pointer;
-                        enabled: (playing || snap_playing) && (!recording || !snapping);
-
-                        ShadowedRectangle {
-                            min-width: 100px;
+                    next := ShadowedButton {
+                        enabled: (audio_playback || input_playback) && (!recording || !input_recording);
+                        min-width: 100px;
     
-                            HorizontalLayout {
-                                padding: 12px;
-                                alignment: center;
-    
-                                Image {
-                                    source: @image-url("icons/next.svg");
-                                    width: 20px;
-                                    height: 20px;
-                                    colorize: next.enabled ? text_default : text_disabled;
+                        HorizontalLayout {
+                            padding: 12px;
+                            alignment: center;
 
-                                    animate colorize {
-                                        duration: 0.1s;
-                                    }
+                            StatusImageLarge {
+                                source: @image-url("icons/next.svg");
+                                colorize: next.enabled ? white : generic_disabled;
+
+                                animate colorize {
+                                    duration: 0.1s;
                                 }
                             }
                         }
 
                         clicked => {
                             skipping = true;
-                            if snap_playing {
-                                snap_playing = false;
-                                button_playing = false;
+                            if input_playback {
+                                input_playback = false;
+                                audio_or_input_playback = false;
                                 play_pause();
                                 if current_recording < recording_names.length - 1 {
                                     current_recording += 1;
                                 } else {
                                     current_recording = 0;
                                 }
-                                snap_skip = true;
+                                skipped_while_input_playing = true;
                             }
-                            if playing {
-                                playing = false;
-                                button_playing = false;
+                            if audio_playback {
+                                audio_playback = false;
+                                audio_or_input_playback = false;
                                 play_pause();
                                 if current_recording < recording_names.length - 1 {
                                     current_recording += 1;
                                 } else {
                                     current_recording = 0;
                                 }
-                                playing_skip = true;
+                                skipped_while_audio_playing = true;
                             }
-                            sync_dial_values_with_recording_values();
+                            sync_current_dial_values_with_recording_values();
                         }
                     }
                 }
@@ -1325,104 +1264,86 @@ export component AppWindow inherits Window {
                 HorizontalLayout {
                     spacing: 12px;
 
-                    snapper := TouchArea {
-                        mouse-cursor: pointer;
-                        enabled: !recording && !button_playing && !short_snap;
-    
-                        ShadowedRectangle {
+                    input_capturer := ShadowedButton {
+                        enabled: !recording && !audio_or_input_playback && !input_recording_timeout;
         
-                            HorizontalLayout {
-                                padding: 12px;
-                                alignment: center;
-    
-                                if snapping:
-                                Image {
-                                    source: @image-url("icons/stop-circle.svg");
-                                    width: 20px;
-                                    height: 20px;
-                                    colorize: snapper.enabled ? snap_default : snap_disabled;
-                                }
-    
-                                if !snapping:
-                                Image {
-                                    source: @image-url("icons/circle.svg");
-                                    width: 20px;
-                                    height: 20px;
-                                    colorize: snapper.enabled ? snap_default : snap_disabled;
-                                }
+                        HorizontalLayout {
+                            padding: 12px;
+                            alignment: center;
+
+                            if input_recording:
+                            StatusImageLarge {
+                                source: @image-url("icons/stop-circle.svg");
+                                colorize: input_capturer.enabled ? snap_colour : snap_disabled;
+                            }
+
+                            if !input_recording:
+                            StatusImageLarge {
+                                source: @image-url("icons/circle.svg");
+                                colorize: input_capturer.enabled ? snap_colour : snap_disabled;
                             }
                         }
     
                         clicked => {
-                            snapping = !snapping;
-                            if snapping {
-                                backup = recording_values;
-                                control_buttons = false;
-                                snap_playing = true;
+                            input_recording = !input_recording;
+                            if input_recording {
+                                dial_values_when_locked = recording_values;
+                                play_and_skip_buttons = false;
+                                input_playback = true;
                                 locked = false;
                                 play_pause();
                             } else {
-                                dial_values = backup[current_recording];
-                                dials_edited = true;
-                                save();
-                                dials_edited = false;
-                                control_buttons = true;
-                                snap_playing = false;
-                                playing = false;
+                                current_dial_values = dial_values_when_locked[current_recording];
+                                save_dial_edits();
+                                play_and_skip_buttons = true;
+                                input_playback = false;
+                                audio_playback = false;
                                 play_pause();
                             }
-                            short_snap = true;
-                            renaming_recording = false;
-                            deleting_recording = false;
+                            input_recording_timeout = true;
+                            recording_renaming_mode = false;
+                            recording_deleting_mode = false;
                         }
                     }
 
-                    recorder := TouchArea {
-                        mouse-cursor: pointer;
-                        enabled: !snapping && !button_playing && !snap_playing && !playing && !short;
-    
-                        ShadowedRectangle {
+                    recorder := ShadowedButton {
+                        enabled: !input_recording && !audio_or_input_playback && !input_playback && !audio_playback && !recording_timeout;
         
-                            HorizontalLayout {
-                                padding: 12px;
-                                alignment: center;
-    
-                                if recording:
-                                Image {
-                                    source: @image-url("icons/stop-circle.svg");
-                                    width: 20px;
-                                    height: 20px;
-                                    colorize: recorder.enabled ? audio_record_default : audio_record_disabled;
-                                }
-    
-                                if !recording:
-                                Image {
-                                    source: @image-url("icons/circle.svg");
-                                    width: 20px;
-                                    height: 20px;
-                                    colorize: recorder.enabled ? audio_record_default : audio_record_disabled;
-                                }
+                        HorizontalLayout {
+                            padding: 12px;
+                            alignment: center;
+
+                            if recording:
+                            StatusImageLarge {
+                                source: @image-url("icons/stop-circle.svg");
+                                colorize: recorder.enabled ? play_and_record_colour : play_and_record_disabled;
+                            }
+
+                            if !recording:
+                            StatusImageLarge {
+                                source: @image-url("icons/circle.svg");
+                                colorize: recorder.enabled ? play_and_record_colour : play_and_record_disabled;
                             }
                         }
     
                         clicked => {
                             recording = !recording;
-                            deleting_recording = false;
-                            renaming_recording = false;
+                            recording_deleting_mode = false;
+                            recording_renaming_mode = false;
                             if recording {
-                                playing = false;
-                                button_playing = false;
-                                control_buttons = false;
+                                audio_playback = false;
+                                audio_or_input_playback = false;
+                                play_and_skip_buttons = false;
                                 locked = false;
                             } else {
-                                control_buttons = true;
-                                playing = false;
-                                button_playing = false;
+                                play_and_skip_buttons = true;
+                                audio_playback = false;
+                                audio_or_input_playback = false;
                                 new_recording = true;
                             }
-                            short = true;
+                            recording_timeout = true;
                             record();
-                            if playing || snap_playing {
+                            if audio_playback || input_playback {
                                 sync_playing_with_ui();
                             }
                         }

@@ -628,24 +628,24 @@ impl Settings {
 
         let mut dials = [0, 0, 0, 0, 0, 0];
         for index in 0..6 {
-            dials[index] = ui.get_dial_values().row_data(index).unwrap();
+            dials[index] = ui.get_current_dial_values().row_data(index).unwrap();
         }
 
         // Check for new preset creation
-        if ui.get_new_preset() {
+        if ui.get_new_preset_created() {
             self.presets.push(Preset::from(dials));
         }
 
         // Check for preset deletion
-        if ui.get_delete_preset() {
-            if self.presets.len() > ui.get_deleted_preset() as usize {
-                self.presets.remove(ui.get_deleted_preset() as usize);
+        if ui.get_preset_deleted() {
+            if self.presets.len() > ui.get_deleted_preset_index() as usize {
+                self.presets.remove(ui.get_deleted_preset_index() as usize);
                 ui.set_can_delete(true);
             }
         }
 
         // Check for preset rename
-        if ui.get_rename_preset() {
+        if ui.get_preset_renamed() {
             for preset in 0..index_data.preset_length {
                 self.presets[preset].name = String::from(match ui.get_preset_names().row_data(preset) {
                     Some(name) => name,
@@ -663,13 +663,13 @@ impl Settings {
         }
 
         // Check for recording deletion
-        if ui.get_delete_recording() {
-            self.recordings.remove(ui.get_deleted_recording() as usize);
+        if ui.get_recording_deleted() {
+            self.recordings.remove(ui.get_deleted_recording_index() as usize);
             ui.set_can_delete(true);
         }
 
         // Check for recording renaming
-        if ui.get_renamed_recording() {
+        if ui.get_recording_renamed() {
             self.recordings = match Recording::rename(&self.recordings, ui.get_recording_names()) {
                 Ok(value) => value,
                 Err(error) => {
@@ -1102,7 +1102,7 @@ fn main() -> Result<(), Box<dyn STDError>> {
         move || {
             let ui = ui_handle.unwrap();
 
-            match File::delete(String::from(ui.get_deleted_recording_value())) {
+            match File::delete(String::from(ui.get_deleted_recording_name())) {
                 Some(error) => {
                     ui.set_error_notification(error.get_text());
                     ui.set_error_recieved(true);
@@ -1129,10 +1129,10 @@ fn main() -> Result<(), Box<dyn STDError>> {
 
             let file = String::from(ui.get_recording_names().row_data(ui.get_current_recording() as usize).unwrap());
 
-            if ui.get_playing() || ui.get_snap_playing() {
+            if ui.get_audio_playback() || ui.get_input_playback() {
 
                 let values = settings.read().unwrap();
-                let snapshot = if ui.get_snapping() {
+                let snapshot = if ui.get_input_recording() {
                     SnapShot::new()
                 } else {
                     match load(&values.recordings[ui.get_current_recording() as usize].name, LoadType::Snapshot) {
@@ -1140,7 +1140,7 @@ fn main() -> Result<(), Box<dyn STDError>> {
                         _ => {
                             ui.set_error_notification(Error::get_text(Error::LoadError));
                             ui.set_error_recieved(true);
-                            ui.set_playing(false);
+                            ui.set_audio_playback(false);
                             return;
                         },
                     }
@@ -1155,11 +1155,11 @@ fn main() -> Result<(), Box<dyn STDError>> {
                     *dial_values = Recording::parse(&values.recordings[ui.get_current_recording() as usize]);
                 }
 
-                match File::play(format!("{}.wav", file), settings.clone(), ui.get_current_recording() as usize, playing.clone(), ui.get_snapping(), ui.get_snap_playing(), snapshot, dials.clone()) {
+                match File::play(format!("{}.wav", file), settings.clone(), ui.get_current_recording() as usize, playing.clone(), ui.get_input_recording(), ui.get_input_playback(), snapshot, dials.clone()) {
                     Some(error) => {
                         ui.set_error_notification(error.get_text());
                         ui.set_error_recieved(true);
-                        ui.set_playing(false);
+                        ui.set_audio_playback(false);
                         {
                             let mut should_play = playing.write().unwrap();
                             *should_play = false;
@@ -1170,7 +1170,7 @@ fn main() -> Result<(), Box<dyn STDError>> {
                 }
             } else {
                 File::stop(playing.clone());
-                ui.set_can_skip(true);
+                ui.set_skipping_allowed(true);
             }
         }
     });
@@ -1182,12 +1182,12 @@ fn main() -> Result<(), Box<dyn STDError>> {
         move || {
             let ui = ui_handle.unwrap();
  
-            Tracker::set_playing(playing_ref_count.clone(), if ui.get_playing() || ui.get_snap_playing() {
+            Tracker::set_playing(playing_ref_count.clone(), if ui.get_audio_playback() || ui.get_input_playback() {
                 true
             } else {
                 let settings = settings_ref_count.read().unwrap();
                 if settings.recordings.len() > 0 {
-                    ui.set_dial_values(ModelRc::new(VecModel::from(settings.recordings[ui.get_current_recording() as usize].parse_vec_from_recording())));
+                    ui.set_current_dial_values(ModelRc::new(VecModel::from(settings.recordings[ui.get_current_recording() as usize].parse_vec_from_recording())));
                 }
                 false
             });
@@ -1205,7 +1205,7 @@ fn main() -> Result<(), Box<dyn STDError>> {
             let is_playing = *playing.read().unwrap();
 
             if !is_playing {
-                ui.set_backend_synced(true);
+                ui.set_synced_with_backend_playing_value(true);
             }
         }
     });
@@ -1220,7 +1220,7 @@ fn main() -> Result<(), Box<dyn STDError>> {
 
             let dial_values = dials.read().unwrap();
 
-            ui.set_dial_values(ModelRc::new(VecModel::from(Recording::parse_vec_from_list(*dial_values))));
+            ui.set_current_dial_values(ModelRc::new(VecModel::from(Recording::parse_vec_from_list(*dial_values))));
         }
     });
 
