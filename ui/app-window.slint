@@ -1,7 +1,8 @@
+// -------- Imports --------
 import { ScrollView } from "std-widgets.slint";
 
 // -------- UI components --------
-component ShadowedRectangle inherits Rectangle {
+component ShadowedRectangle inherits Rectangle { // Rectangle with a drop shadow and a border
     border-width: 1px;
     border-radius: 12px;
     border-color: #ffffff;
@@ -13,66 +14,66 @@ component ShadowedRectangle inherits Rectangle {
 }
 
 // ---- Text ----
-component HeadingLarge inherits Text {
+component HeadingLarge inherits Text { // Large and bold text
     font-size: 16px;
     font-weight: 700;
 }
 
-component HeadingSmall inherits Text {
+component HeadingSmall inherits Text { // Small and bold text
     font-size: 12px;
     font-weight: 700;
     overflow: elide;
 }
 
-component NormalText inherits Text {
+component NormalText inherits Text { // Small and non bold text
     font-size: 12px;
     font-weight: 300;
     overflow: elide;
 }
 
 // ---- Images ----
-component StatusImageSmall inherits Image {
+component StatusImageSmall inherits Image { // Small image size
     width: 16px;
     height: 16px;
 }
 
-component StatusImageLarge inherits Image {
+component StatusImageLarge inherits Image { // Large image size
     width: 20px;
     height: 20px;
 }
 
 // ---- Buttons ----
-component BasicButton inherits TouchArea {
+component BasicButton inherits TouchArea { // Invisible button
     mouse-cursor: self.enabled ? pointer : default;
 }
 
-component ShadowedButton inherits BasicButton {
+component ShadowedButton inherits BasicButton { // Button with a border and a drop shadow
     ShadowedRectangle {
     }
 }
 
 export component AppWindow inherits Window {
     // Window setup
-    title: "audio";
-    background: background_default_colour;
+    title: "audio"; // Name of the app
+    background: default_background_colour; // Background colour of the app
 
     // -------- Variables --------
-    in-out property <bool> started: true;
-    private property <bool> should_delete: false;
-    in-out property <bool> can_delete: true;
+    in-out property <bool> started: true; // Keeps track of when the app needs to load data from disk
+    private property <bool> should_delete: false; // Whether a recording or a preset needs deleting
+    in-out property <bool> can_delete: true; // Prevents spamming by disabling deleting while the animation plays
     
     // ---- Dials ----
     private property <[[string]]> dial_names: [["Sub Bass", "Bass", "Low Mids"], ["High Mids", "Treble", "Pan"]];
     // Values and edits
     in-out property <[int]> current_dial_values: [0, 0, 0, 0, 0, 0];
-    private property <[int]> previous_dial_values: [0, 0, 0, 0, 0, 0];
-    private property <[[int]]> dial_values_when_locked: [[0, 0, 0, 0, 0, 0]];
+    private property <[int]> previous_dial_values: [0, 0, 0, 0, 0, 0]; // The values that the dials held one edit ago
+    private property <[[int]]> dial_values_when_locked: [[0, 0, 0, 0, 0, 0]]; // The values that the dials held when the lock button was pressed
     out property <bool> dials_edited: false;
     // input_recording
-    private property <length> snap_by: 10px;
-    private property <length> next_dial_snap_position: snap_by;
-    private property <length> previous_dial_snap_position: snap_by - snap_by;
-    private property <length> dial_pressed_position: 0px;
+    private property <length> snap_by: 10px; // How far the user needs to move the mouse to cause a dial to rotate
+    private property <length> next_dial_snap_position: snap_by; // The next valid position that will recognise a dial rotation
+    private property <length> previous_dial_snap_position: snap_by - snap_by; // The previous valid postion that will recognise a dial rotation
+    private property <length> dial_pressed_position: 0px; // The initially clicked position of a dial
     
     // ---- Presets ----
     in-out property <[string]> preset_names: [];
@@ -85,60 +86,59 @@ export component AppWindow inherits Window {
     // Deleting
     private property <bool> preset_deleting_mode: false;
     out property <bool> preset_deleted: false;
-    out property <int> deleted_preset_index: 0;
+    out property <int> deleted_preset_index: 0; // Which preset has been deleted
     
     // ---- Recordings ----
     in-out property <[string]> recording_names: [];
     in-out property <[[int]]> recording_values: [];
-    out property <int> current_recording: 0;
+    out property <int> current_recording: 0; // The currently selected recording
     // Renaming
     private property <bool> recording_renaming_mode: false;
     out property <bool> recording_renamed: false;
     // Deleting
     private property <bool> recording_deleting_mode: false;
     out property <bool> recording_deleted: false;
-    out property <int> deleted_recording_index: 0;
-    in-out property <string> deleted_recording_name: "";
+    out property <int> deleted_recording_index: 0; // Which recording has been deleted
+    in-out property <string> deleted_recording_name: ""; // The name of the deleted recording
     
     // ---- Playback ----
-    out property <bool> audio_or_input_playback: audio_playback || input_playback;
-    private property <bool> play_and_skip_buttons: true;
+    out property <bool> audio_or_input_playback: audio_playback || input_playback; // True if either play button is playing something
     private property <bool> playback_allowed: true;
-    in-out property <bool> locked: false;
-    private property <bool> looping: false;
-    private property <bool> auto_skip_next: true;
+    in-out property <bool> locked: false; // Prevents dial rotations from being saved to disk and from updating the UI
+    private property <bool> looping: false; // Loops the currently playing track indefinitely
+    private property <bool> auto_skip_next: true; // Automatically skips to the next track when the current one ends
     
     // ---- Audio playback ----
-    in-out property <bool> audio_playback: false;
-    in-out property <bool> synced_with_backend_playing_value: false;
+    in-out property <bool> audio_playback: false; // True when playing back audio normally
+    in-out property <bool> backend_not_playing: false; // Used to sync the UI with the state of the backend
     
     // ---- Audio recording ----
-    in-out property <bool> recording: false;
+    in-out property <bool> recording: false; // Whether a recording is in progress
     in-out property <bool> new_recording: false;
-    private property <bool> recording_timeout: false;
-    in-out property <int> new_recording_index: 0;
+    private property <bool> recording_timeout: false; // Disables the recording button for a short period to prevent spamming
+    in-out property <int> new_recording_index: 0; // Where in the list to create the new recording, used purely for animation purposes
 
     // ---- Input playback ----
-    in-out property <bool> input_playback: false;
+    in-out property <bool> input_playback: false; // True when playing back audio and recorded inputs
     
     // ---- Input recording ----
-    in-out property <bool> input_recording: false;
-    private property <bool> input_recording_timeout: false;
+    in-out property <bool> input_recording: false; // Whether the app is listening for changes in the dials rotation
+    private property <bool> input_recording_timeout: false; // Disables the input recording button for a short period to prevent spamming
 
     // ---- Skipping ----
-    private property <bool> skipped_while_audio_playing: false;
-    private property <bool> skipped_while_input_playing: false;
-    in-out property <bool> skipping_allowed: false;
-    private property <bool> skipping: false;
+    private property <bool> skipped_while_audio_playing: false; // Checks whether it should continue playing from the normal player when skipped
+    private property <bool> skipped_while_input_playing: false; // Checks whether it should continue playing from the input player when skipped
+    in-out property <bool> skipping_allowed: false; // Makes sure the backend has stopped playing before skipping to prevent spamming
+    private property <bool> skipping: false; // True when skipping caused from any source
 
     // ---- Errors ----
-    in-out property <string> error_notification: "";
-    in-out property <bool> error-recieved: false;
+    in-out property <string> error_notification: ""; // Contents of the error
+    in-out property <bool> error-recieved: false; // Whether there is an error
 
     // ---- Colour palette ----
     private property <color> transparent_colour: #24242400;
-    private property <color> background_default_colour: #242424;
-    private property <color> drop_shadow_default_colour: #151515;
+    private property <color> default_background_colour: #242424;
+    private property <color> default_drop_shadow_colour: #151515;
     private property <brush> recording_border_colour: @linear-gradient(90deg, #ffffff 10%, #ffffff00 90%);
     private property <color> white: #ffffff;
     private property <color> generic_disabled: #5d5d5d;
@@ -152,32 +152,22 @@ export component AppWindow inherits Window {
     private property <color> highlight_colour: #3e3e3e;
 
     // -------- Callbacks --------
-    callback update();
-    callback save();
-    callback delete_recordings();
-    callback record();
-    callback play_pause();
-    callback sync_playing_with_ui();
-    callback sync_playing_with_backend();
-    callback snapshot_dial_update();
+    callback update(); // Updates the UI with values from the backend
+    callback save(); // Saves new values to disk
+    callback delete_recordings(); // Deletes recordings from the backend
+    callback record(); // Records and saves a new recording
+    callback play_pause(); // Plays and pauses recordings
+    callback sync_playing_with_ui(); // Syncs the playing value in the backend with the one in the UI
+    callback sync_playing_with_backend(); // Syncs the playing value in the UI with the one in the backend
+    callback snapshot_dial_update(); // Updates dials with the saved snapshot value
 
     // -------- Functions --------
     function sync_current_dial_values_with_recording_values() {
-        current_dial_values[0] = recording_values[current_recording][0];
-        current_dial_values[1] = recording_values[current_recording][1];
-        current_dial_values[2] = recording_values[current_recording][2];
-        current_dial_values[3] = recording_values[current_recording][3];
-        current_dial_values[4] = recording_values[current_recording][4];
-        current_dial_values[5] = recording_values[current_recording][5];
+        current_dial_values = recording_values[current_recording];
     }
 
-    function sync_dial_values_with_backup_values() {
-        current_dial_values[0] = dial_values_when_locked[current_recording][0];
-        current_dial_values[1] = dial_values_when_locked[current_recording][1];
-        current_dial_values[2] = dial_values_when_locked[current_recording][2];
-        current_dial_values[3] = dial_values_when_locked[current_recording][3];
-        current_dial_values[4] = dial_values_when_locked[current_recording][4];
-        current_dial_values[5] = dial_values_when_locked[current_recording][5];
+    function sync_dial_values_with_locked_values() {
+        current_dial_values = dial_values_when_locked[current_recording];
     }
 
     function save_dial_edits() {
@@ -187,14 +177,14 @@ export component AppWindow inherits Window {
     }
 
     function calculate_skipped_to_recording(forward: bool) {
-        if forward {
-            if current_recording < recording_names.length - 1 {
+        if forward { // Checks whehter you skipped forwards or backwards
+            if current_recording < recording_names.length - 1 { // If selecting the last recording, go to the first recording, otherwise go to the next recording
                 current_recording += 1;
             } else {
                 current_recording = 0;
             }
         } else {
-            if current_recording > 0 {
+            if current_recording > 0 { // If selecting the first recording, go to the last recording, otherwise go back a recording
                 current_recording -= 1;
             } else {
                 current_recording = recording_names.length - 1;
@@ -206,7 +196,6 @@ export component AppWindow inherits Window {
         skipping = true;
         if input_playback {
             input_playback = false;
-            play_pause();
             if skipped_with_button {
                 calculate_skipped_to_recording(skipped_forward)
             }
@@ -214,12 +203,12 @@ export component AppWindow inherits Window {
         }
         if audio_playback {
             audio_playback = false;
-            play_pause();
             if skipped_with_button {
                 calculate_skipped_to_recording(skipped_forward)
             }
             skipped_while_audio_playing = true;
         }
+        play_pause();
     }
 
     function set_playing_values(audio: bool, input: bool) {
@@ -252,7 +241,6 @@ export component AppWindow inherits Window {
         dial_values_when_locked = recording_values;
         recording_renaming_mode = false;
         recording_deleting_mode = false;
-        play_and_skip_buttons = false;
         locked = false;
     }
 
@@ -357,11 +345,10 @@ export component AppWindow inherits Window {
                 snapshot_dial_update();
             }
             sync_playing_with_backend();
-            if synced_with_backend_playing_value {
-                play_and_skip_buttons = true;
-                synced_with_backend_playing_value = false;
+            if backend_not_playing {
+                backend_not_playing = false;
                 if input_playback || input_recording {
-                    sync_dial_values_with_backup_values();
+                    sync_dial_values_with_locked_values();
                     save_dial_edits();
                 }
 
@@ -371,7 +358,7 @@ export component AppWindow inherits Window {
                     } else {
                         current_recording = 0;
                     }
-                    sync_dial_values_with_backup_values();
+                    sync_dial_values_with_locked_values();
 
                     play_pause();
                 } else if looping {
@@ -385,11 +372,11 @@ export component AppWindow inherits Window {
         }
     }
 
-    // Pause to give time for audio to pause before audio_playback the next one
+    // Pause to give time for audio to pause before playing the next one
     // Also checks with backend to make sure it has finished pausing
     Timer {
-        running: skipped_while_audio_playing || skipped_while_input_playing;
-        interval: 50ms;
+        running: skipping;
+        interval: 1s;
 
         triggered => {
             if skipping_allowed {
@@ -774,7 +761,7 @@ export component AppWindow inherits Window {
                                     }
     
                                     clicked => {
-                                        sync_dial_values_with_backup_values();
+                                        sync_dial_values_with_locked_values();
                                         save_dial_edits();
                                     }
                                 }
@@ -879,7 +866,6 @@ export component AppWindow inherits Window {
                             clicked => {
                                 recording_renaming_mode = !recording_renaming_mode;
                                 recording_renamed = true;
-                                play_and_skip_buttons = true;
                             }
                         }
 
@@ -900,7 +886,6 @@ export component AppWindow inherits Window {
                                 recording_deleting_mode = false;
                                 recording_renaming_mode = !recording_renaming_mode;
                                 set_playing_values(false, false);
-                                play_and_skip_buttons = false;
                             }
                         }
 
@@ -1005,7 +990,6 @@ export component AppWindow inherits Window {
 
                             clicked => {
                                 recording_deleting_mode = !recording_deleting_mode;
-                                play_and_skip_buttons = true;
                             }
                         }
 
@@ -1026,7 +1010,6 @@ export component AppWindow inherits Window {
                                 recording_deleting_mode = !recording_deleting_mode;
                                 recording_renaming_mode = false;
                                 set_playing_values(false, false);
-                                play_and_skip_buttons = false;
                             }
                         }
 
@@ -1047,7 +1030,7 @@ export component AppWindow inherits Window {
 
                             for recording[index] in recording_values:
                             BasicButton {
-                                enabled: !recording_renaming_mode && can_delete;
+                                enabled: !recording_renaming_mode && can_delete && !skipping;
 
                                 Rectangle {
                                     border-radius: 8px;
@@ -1096,7 +1079,7 @@ export component AppWindow inherits Window {
                                             vertical-alignment: center;
                                             font-size: recording_renaming_mode || (deleted_recording_index == index && recording_deleted) || (new_recording && index == recording_names.length - 1) ? 1px : 12px;
                                             opacity: recording_renaming_mode || (deleted_recording_index == index && recording_deleted) || (new_recording && index == recording_names.length - 1) ? 0% : 100%;
-                                            color: locked || input_recording || input_playback ? generic_disabled : white;
+                                            color: locked || input_recording || input_playback || skipping ? generic_disabled : white;
 
                                             animate font-size, opacity, color {
                                                 duration: 0.3s;
@@ -1171,7 +1154,7 @@ export component AppWindow inherits Window {
                     }
 
                     play_inputs := ShadowedButton {
-                        enabled: play_and_skip_buttons && !audio_playback && playback_allowed;
+                        enabled: !audio_playback && playback_allowed && !recording && !input_recording;
                         min-width: 100px;
     
                         HorizontalLayout {
@@ -1205,7 +1188,7 @@ export component AppWindow inherits Window {
                     }
 
                     play := ShadowedButton {
-                        enabled: play_and_skip_buttons && !input_playback && playback_allowed;
+                        enabled: !input_playback && playback_allowed && !recording && !input_recording;
                         min-width: 100px;
     
                         HorizontalLayout {
@@ -1295,7 +1278,6 @@ export component AppWindow inherits Window {
                             } else {
                                 current_dial_values = dial_values_when_locked[current_recording];
                                 save_dial_edits();
-                                play_and_skip_buttons = true;
                                 input_playback = false;
                                 play_pause();
                             }
@@ -1328,7 +1310,6 @@ export component AppWindow inherits Window {
                             if recording {
                                 disable_buttons_on_record();
                             } else {
-                                play_and_skip_buttons = true;
                                 new_recording = true;
                             }
                             recording_timeout = true;

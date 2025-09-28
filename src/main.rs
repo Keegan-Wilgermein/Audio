@@ -1205,7 +1205,7 @@ fn main() -> Result<(), Box<dyn STDError>> {
             let is_playing = *playing.read().unwrap();
 
             if !is_playing {
-                ui.set_synced_with_backend_playing_value(true);
+                ui.set_backend_not_playing(true);
             }
         }
     });
