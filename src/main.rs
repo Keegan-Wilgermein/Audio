@@ -75,8 +75,8 @@ impl File {
                                             None => OsString::from("Couldn't read name"),
                                         };
                                         names.push(match file_name.into_string() {
-                                            Ok(value) => {
-                                                File::truncate(value)
+                                            Ok(mut value) => {
+                                                File::truncate(&mut value)
                                             },
                                             Err(_) => String::from("Couldn't read name"),
                                         });
@@ -96,7 +96,7 @@ impl File {
         }
     }
 
-    fn truncate(mut name: String) -> String {
+    fn truncate(name: &mut String) -> String {
         let mut length = name.len() - 1;
         loop {
             if name.ends_with(".") {
@@ -104,14 +104,14 @@ impl File {
                 break;
             } else {
                 if length == 1 {
-                    name = String::from("Invalid file extension");
+                    *name = String::from("Invalid file extension");
                 }
                 name.remove(length);
                 length -= 1;
             }
         }
 
-        String::from(name)
+        name.to_string()
     }
 
     fn rename(old: &String, name: String) -> Option<Error> {
@@ -157,7 +157,7 @@ impl File {
         check
     }
 
-    fn play(file: String, values: Arc<RwLock<Settings>>, selected_recording: usize, paused: Arc<RwLock<bool>>, snapping: bool, snap_playing: bool, mut snapshot: SnapShot, frame_updates: Arc<RwLock<[i32; 6]>>) -> Option<Error> {
+    fn play(mut file: String, values: Arc<RwLock<Settings>>, selected_recording: usize, paused: Arc<RwLock<bool>>, snapping: bool, snap_playing: bool, mut snapshot: SnapShot, frame_updates: Arc<RwLock<[i32; 6]>>) -> Option<Error> {
 
         let state = match thread::Builder::new().name(String::from("Player")).spawn(move || {
 
@@ -192,7 +192,7 @@ impl File {
                 }
             };
 
-            let sound_data = match StaticSoundData::from_file(file.clone()) {
+            let sound_data = match StaticSoundData::from_file(&file) {
                 Ok(value) => value,
                 Err(_) => {
                     return Some(Error::ReadError);
@@ -307,7 +307,7 @@ impl File {
             
             if snapping {
                 snapshot.frames.remove(0);
-                SnapShot::save(snapshot, &File::truncate(file));
+                SnapShot::save(snapshot, &File::truncate(&mut file));
             }
 
             None
@@ -450,9 +450,9 @@ struct Recording {
 }
 
 impl Recording {
-    fn new(name: String) -> Recording {
+    fn new(name: &String) -> Recording {
         Recording {
-            name: name,
+            name: name.to_string(),
             sub_bass: 0,
             bass: 0,
             low_mids: 0,
@@ -462,9 +462,9 @@ impl Recording {
         }
     }
 
-    fn from(name: String, values: [i32; 6]) -> Recording {
+    fn from(name: &String, values: [i32; 6]) -> Recording {
         Recording {
-            name: name,
+            name: name.to_string(),
             sub_bass: values[0],
             bass: values[1],
             low_mids: values[2],
@@ -552,16 +552,16 @@ impl Recording {
         for name in 0..old.len() {
             if new.row_data(name).unwrap() != old[name].name {
                 if new.row_data(name).unwrap().contains(&String::from("Default taken...")) {
-                    recording_list.push(Recording::from(old[name].name.clone(), Recording::parse(&old[name])));
+                    recording_list.push(Recording::from(&old[name].name, Recording::parse(&old[name])));
                     fallback_error_occured = true;
                 } else if new.row_data(name).unwrap() == String::from("settings") {
-                    recording_list.push(Recording::from(old[name].name.clone(), Recording::parse(&old[name])));
+                    recording_list.push(Recording::from(&old[name].name, Recording::parse(&old[name])));
                     save_file_rename_error_occured = true;
                 } else if new.row_data(name).unwrap().is_empty() || new.row_data(name).unwrap() == String::from("") {
-                    recording_list.push(Recording::from(old[name].name.clone(), Recording::parse(&old[name])));
+                    recording_list.push(Recording::from(&old[name].name, Recording::parse(&old[name])));
                     empty_error_occured = true;
                 } else if File::exists(String::from(new.row_data(name).unwrap()), &old) {
-                    recording_list.push(Recording::from(old[name].name.clone(), Recording::parse(&old[name])));
+                    recording_list.push(Recording::from(&old[name].name, Recording::parse(&old[name])));
                     exists_error_occured = true;
                 } else {
                     match File::rename(&old[name].name, String::from(new.row_data(name).unwrap())) {
@@ -571,10 +571,10 @@ impl Recording {
                         None => {
                         }
                     }
-                    recording_list.push(Recording::from(String::from(new.row_data(name).unwrap()), Recording::parse(&old[name])));
+                    recording_list.push(Recording::from(&String::from(new.row_data(name).unwrap()), Recording::parse(&old[name])));
                 }
             } else {
-                recording_list.push(Recording::from(old[name].name.clone(), Recording::parse(&old[name])));
+                recording_list.push(Recording::from(&old[name].name, Recording::parse(&old[name])));
             }
         }
         
@@ -652,7 +652,7 @@ impl Settings {
         if index_data.recording_length > 0 {
             let position = new.get_current_recording() as usize;
             if new.get_dials_edited() {
-                self.recordings[position] = Recording::from(self.recordings[position].name.clone(), dials);
+                self.recordings[position] = Recording::from(&self.recordings[position].name, dials);
             }
         }
 
@@ -707,15 +707,15 @@ impl Settings {
                 if self.recordings.len() > 0 {
                     for recording in 0..self.recordings.len() {
                         if self.recordings[recording].name == file_names[name] {
-                            updated_recordings.push(Recording::from(file_names[name].clone(), Recording::parse(&self.recordings[recording])));
+                            updated_recordings.push(Recording::from(&file_names[name], Recording::parse(&self.recordings[recording])));
                             break;
                         }
                         if recording == self.recordings.len() - 1 {
-                            updated_recordings.push(Recording::new(file_names[name].clone()));
+                            updated_recordings.push(Recording::new(&file_names[name]));
                         }
                     }
                 } else {
-                    updated_recordings.push(Recording::new(file_names[name].clone()));
+                    updated_recordings.push(Recording::new(&file_names[name]));
                 }
 
                 // Syncs snapshots
@@ -811,7 +811,7 @@ impl Tracker {
                 new_name = String::from("Recording 1.wav");
             }
 
-            let mut writer = match WavWriter::create(new_name.clone(), audio_spec) {
+            let mut writer = match WavWriter::create(new_name, audio_spec) {
                 Ok(value) => value,
                 Err(_) => {
                     return Some(Error::WriteError);
@@ -893,7 +893,7 @@ impl Tracker {
     }
 
     fn set_playing(set: Arc<RwLock<bool>>, from: bool) {
-        let should_play = set.clone();
+        let should_play = set;
         let mut playing = should_play.write().unwrap();
         *playing = from;
     }
@@ -1145,7 +1145,6 @@ fn main() -> Result<(), Box<dyn STDError>> {
                     *should_play = true;
                 }
                 {
-                    let values = settings.read().unwrap();
                     let mut dial_values = dials.write().unwrap();
                     *dial_values = Recording::parse(&values.recordings[ui.get_current_recording() as usize]);
                 }
@@ -1209,6 +1208,7 @@ fn main() -> Result<(), Box<dyn STDError>> {
         let ui_handle = ui.as_weak();
 
         let dials = tracker.snapshot_frame_values.clone();
+
         move || {
             let ui = ui_handle.unwrap();
 
