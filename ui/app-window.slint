@@ -1,5 +1,17 @@
 import { ScrollView } from "std-widgets.slint";
 
+// -------- UI components --------
+component ShadowedRectangle inherits Rectangle {
+    border-width: 1px;
+    border-radius: 12px;
+    border-color: #ffffff;
+    background: #242424;
+    drop-shadow-color: #151515;
+    drop-shadow-blur: 8px;
+    drop-shadow-offset-x: 6px;
+    drop-shadow-offset-y: 6px;
+}
+
 export component AppWindow inherits Window {
     // Window setup and settings
     title: "audio";
@@ -27,6 +39,7 @@ export component AppWindow inherits Window {
     out property <bool> renamed_recording: false;
 
     in-out property <[int]> dial_values: [0, 0, 0, 0, 0, 0];
+    private property <[int]> last_edit: [0, 0, 0, 0, 0, 0];
     private property <[[int]]> backup: [[0, 0, 0, 0, 0, 0]];
 
     in-out property <bool> playing: false;
@@ -71,6 +84,22 @@ export component AppWindow inherits Window {
 
     in-out property <int> new_recording_index: 0;
 
+    // -------- Colour palette --------
+    private property <color> transparent_colour: #24242400;
+    private property <color> background_default: #242424;
+    private property <color> drop_shadow_default: #151515;
+    private property <brush> recording_border_default: @linear-gradient(90deg, #ffffff 10%, #ffffff00 90%);
+    private property <color> text_default: #ffffff;
+    private property <color> text_disabled: #5d5d5d;
+    private property <color> audio_record_default: #ec4747;
+    private property <color> audio_record_disabled: #912e2e;
+    private property <color> snap_default: #479cec;
+    private property <color> snap_disabled: #244c72;
+    private property <brush> rename_colour: @linear-gradient(90deg, #3f51b5 30%, transparent_colour 100%);
+    private property <brush> delete_colour: @linear-gradient(90deg, #dc4242 30%, transparent_colour 100%);
+    private property <color> error_colour: #dc4242;
+    private property <color> highlight_default: #3e3e3e;
+
     // -------- Callbacks --------
     callback update();
     callback save();
@@ -80,6 +109,25 @@ export component AppWindow inherits Window {
     callback sync_playing_with_ui();
     callback sync_playing_with_backend();
     callback snapshot_dial_update();
+
+    // -------- Functions --------
+    function sync_dial_values_with_recording_values() {
+        dial_values[0] = recording_values[current_recording][0];
+        dial_values[1] = recording_values[current_recording][1];
+        dial_values[2] = recording_values[current_recording][2];
+        dial_values[3] = recording_values[current_recording][3];
+        dial_values[4] = recording_values[current_recording][4];
+        dial_values[5] = recording_values[current_recording][5];
+    }
+
+    function sync_dial_values_with_backup_values() {
+        dial_values[0] = backup[current_recording][0];
+        dial_values[1] = backup[current_recording][1];
+        dial_values[2] = backup[current_recording][2];
+        dial_values[3] = backup[current_recording][3];
+        dial_values[4] = backup[current_recording][4];
+        dial_values[5] = backup[current_recording][5];
+    }
 
     // -------- Timers --------
     // Loads settings to UI on startup
@@ -91,12 +139,7 @@ export component AppWindow inherits Window {
             self.running = false;
             update();
             started = false;
-            dial_values[0] = recording_values[current_recording][0];
-            dial_values[1] = recording_values[current_recording][1];
-            dial_values[2] = recording_values[current_recording][2];
-            dial_values[3] = recording_values[current_recording][3];
-            dial_values[4] = recording_values[current_recording][4];
-            dial_values[5] = recording_values[current_recording][5];
+            sync_dial_values_with_recording_values();
         }
     }
 
@@ -191,12 +234,7 @@ export component AppWindow inherits Window {
                 control_buttons = true;
                 backend_synced = false;
                 if snap_playing || snapping {
-                    dial_values[0] = backup[current_recording][0];
-                    dial_values[1] = backup[current_recording][1];
-                    dial_values[2] = backup[current_recording][2];
-                    dial_values[3] = backup[current_recording][3];
-                    dial_values[4] = backup[current_recording][4];
-                    dial_values[5] = backup[current_recording][5];
+                    sync_dial_values_with_backup_values();
                     dials_edited = true;
                     save();
                     dials_edited = false;
@@ -208,12 +246,7 @@ export component AppWindow inherits Window {
                     } else {
                         current_recording = 0;
                     }
-                    dial_values[0] = backup[current_recording][0];
-                    dial_values[1] = backup[current_recording][1];
-                    dial_values[2] = backup[current_recording][2];
-                    dial_values[3] = backup[current_recording][3];
-                    dial_values[4] = backup[current_recording][4];
-                    dial_values[5] = backup[current_recording][5];
+                    sync_dial_values_with_backup_values();
 
                     play_pause();
                 } else if loop {
@@ -300,15 +333,7 @@ export component AppWindow inherits Window {
                 spacing: 12px;
 
                 for dial[index2] in group:
-                Rectangle {
-                    border-width: 1px;
-                    border-color: #ffffff;
-                    border-radius: 12px;
-                    background: #242424;
-                    drop-shadow-color: #151515;
-                    drop-shadow-blur: 8px;
-                    drop-shadow-offset-x: 6px;
-                    drop-shadow-offset-y: 6px;
+                ShadowedRectangle {
                     
                     VerticalLayout {
                         padding: 12px;
@@ -331,15 +356,9 @@ export component AppWindow inherits Window {
                                 rotator := SwipeGestureHandler {
                                     enabled: (!recording && !snap_playing) || snapping;
 
-                                    Rectangle {
+                                    ShadowedRectangle {
                                         border-width: 2px;
-                                        border-color: #ffffff;
                                         border-radius: 100px;
-                                        background: #242424;
-                                        drop-shadow-color: #151515;
-                                        drop-shadow-blur: 8px;
-                                        drop-shadow-offset-x: 6px;
-                                        drop-shadow-offset-y: 6px;
                                         height: 60px;
                                         width: 60px;
             
@@ -352,7 +371,7 @@ export component AppWindow inherits Window {
                                                 height: 40px;
                                                 width: 60px;
                                                 rotation-angle: dial_values[index2 + (index * 3)] * 20deg;
-                                                colorize: rotator.enabled ? #ffffff : #5d5d5d;
+                                                colorize: rotator.enabled ? text_default : text_disabled;
 
                                                 animate colorize {
                                                     duration: 0.1s;
@@ -368,12 +387,14 @@ export component AppWindow inherits Window {
                                             dial_pressed = self.pressed-position.x;
                                         }
                                         if self.current-position.x - self.pressed-position.x > next_snap {
+                                            last_edit = recording_values[current_recording];
                                             if dial_values[index2 + (index * 3)] < 7 {
                                                 dial_values[index2 + (index * 3)] += 1;
                                                 last_snap = next_snap;
                                                 next_snap += snap_by;
                                             }
                                         } else if self.current-position.x - self.pressed-position.x < last_snap {
+                                            last_edit = recording_values[current_recording];
                                             if dial_values[index2 + (index * 3)] > -7 {
                                                 dial_values[index2 + (index * 3)] -= 1;
                                                 next_snap = last_snap;
@@ -428,7 +449,7 @@ export component AppWindow inherits Window {
                                 source: @image-url("icons/plus.svg");
                                 width: 20px;
                                 height: 20px;
-                                colorize: !add.enabled ? #5d5d5d : #ffffff;
+                                colorize: add.enabled ? text_default : text_disabled;
 
                                 animate colorize {
                                     duration: 0.2s;
@@ -466,7 +487,7 @@ export component AppWindow inherits Window {
                                 source: @image-url("icons/rename.svg");
                                 width: 16px;
                                 height: 16px;
-                                colorize: !preset_rename.enabled ? #5d5d5d : #ffffff;
+                                colorize: preset_rename.enabled ? text_default : text_disabled;
 
                                 animate colorize {
                                     duration: 0.2s;
@@ -503,7 +524,7 @@ export component AppWindow inherits Window {
                                 source: @image-url("icons/trash.svg");
                                 width: 16px;
                                 height: 16px;
-                                colorize: !preset_delete.enabled ? #5d5d5d : #ffffff;
+                                colorize: preset_delete.enabled ? text_default : text_disabled;
 
                                 animate colorize {
                                     duration: 0.2s;
@@ -530,54 +551,99 @@ export component AppWindow inherits Window {
                             }
 
                             VerticalLayout {
-                                spacing: !locked ? 0px : 16px;
+                                spacing: locked ? 16px : 0px;
                                 alignment: start;
 
                                 animate spacing {
                                     duration: 0.3s;
                                 }
 
-                                reset := TouchArea {
-                                    mouse-cursor: pointer;
-                                    enabled: (!renaming_preset && !deleting_preset && !snap_playing && can_delete) || snapping;
-    
-                                    Rectangle {
-                                        border-radius: 8px;
-                                        background: #ffffff00;
-    
-                                        VerticalLayout {
-                                            spacing: 4px;
-                                            alignment: start;
-                
-                                            Text {
-                                                text: deleting_preset ? "Can't delete preset" : renaming_preset ? "Can't rename preset" : "Reset";
-                                                font-weight: 700;
-                                                overflow: elide;
-                                            }
+                                VerticalLayout {
+                                    alignment: start;
+                                    spacing: 16px;
+
+                                    reset := TouchArea {
+                                        mouse-cursor: pointer;
+                                        enabled: (!renaming_preset && !deleting_preset && !snap_playing && can_delete) || snapping;
+        
+                                        Rectangle {
+                                            border-radius: 8px;
+                                            background: #ffffff00;
+        
+                                            VerticalLayout {
+                                                spacing: 4px;
+                                                alignment: start;
                     
-                                            Text {
-                                                text: "0  0  0  0  0  0";
-                                                overflow: elide;
-                                                vertical-alignment: center;
-                                                color: !reset.enabled ? #5d5d5d : #ffffff;
-    
-                                                animate color {
-                                                    duration: 0.2s;
+                                                Text {
+                                                    text: deleting_preset ? "Can't delete preset" : renaming_preset ? "Can't rename preset" : "Reset";
+                                                    font-weight: 700;
+                                                    overflow: elide;
+                                                }
+                        
+                                                Text {
+                                                    text: "0  0  0  0  0  0";
+                                                    overflow: elide;
+                                                    vertical-alignment: center;
+                                                    color: reset.enabled ? text_default : text_disabled;
+        
+                                                    animate color {
+                                                        duration: 0.2s;
+                                                    }
                                                 }
                                             }
                                         }
+        
+                                        clicked => {
+                                            last_edit = recording_values[current_recording];
+                                            dial_values = [0, 0, 0, 0, 0, 0];
+                                            dials_edited = true;
+                                            save();
+                                            dials_edited = false;
+                                        }
                                     }
     
-                                    clicked => {
-                                        dial_values[0] = 0;
-                                        dial_values[1] = 0;
-                                        dial_values[2] = 0;
-                                        dial_values[3] = 0;
-                                        dial_values[4] = 0;
-                                        dial_values[5] = 0;
-                                        dials_edited = true;
-                                        save();
-                                        dials_edited = false;
+                                    last := TouchArea {
+                                        mouse-cursor: pointer;
+                                        enabled: (!renaming_preset && !deleting_preset && !snap_playing && can_delete) || snapping;
+        
+                                        Rectangle {
+                                            border-radius: 8px;
+                                            background: #ffffff00;
+        
+                                            VerticalLayout {
+                                                spacing: 4px;
+                                                alignment: start;
+                    
+                                                Text {
+                                                    text: deleting_preset ? "Can't delete preset" : renaming_preset ? "Can't rename preset" : "Last edit";
+                                                    font-weight: 700;
+                                                    overflow: elide;
+                                                }
+                        
+                                                Text {
+                                                    text: "\{last_edit[0]}  \{last_edit[1]}  \{last_edit[2]}  \{last_edit[3]}  \{last_edit[4]}  \{last_edit[5]}";
+                                                    overflow: elide;
+                                                    vertical-alignment: center;
+                                                    color: last.enabled ? text_default : text_disabled;
+        
+                                                    animate color {
+                                                        duration: 0.2s;
+                                                    }
+                                                }
+                                            }
+                                        }
+        
+                                        clicked => {
+                                            dial_values[0] = last_edit[0];
+                                            dial_values[1] = last_edit[1];
+                                            dial_values[2] = last_edit[2];
+                                            dial_values[3] = last_edit[3];
+                                            dial_values[4] = last_edit[4];
+                                            dial_values[5] = last_edit[5];
+                                            dials_edited = true;
+                                            save();
+                                            dials_edited = false;
+                                        }
                                     }
                                 }
     
@@ -626,12 +692,8 @@ export component AppWindow inherits Window {
                                     }
     
                                     clicked => {
-                                        dial_values[0] = backup[current_recording][0];
-                                        dial_values[1] = backup[current_recording][1];
-                                        dial_values[2] = backup[current_recording][2];
-                                        dial_values[3] = backup[current_recording][3];
-                                        dial_values[4] = backup[current_recording][4];
-                                        dial_values[5] = backup[current_recording][5];
+                                        last_edit = recording_values[current_recording];
+                                        sync_dial_values_with_backup_values();
                                         dials_edited = true;
                                         save();
                                         dials_edited = false;
@@ -646,7 +708,7 @@ export component AppWindow inherits Window {
 
                                 Rectangle {
                                     border-radius: 8px;
-                                    background: deleted_preset == index && delete_preset ? #ffffff00 : deleting_preset ? @linear-gradient(90deg, #dc4242 30%, #ed2e2e00 100%) : renaming_preset ? @linear-gradient(90deg, #3f51b5 30%, #3f51b500 100%) : #ffffff00;
+                                    background: deleted_preset == index && delete_preset ? transparent_colour : deleting_preset ? delete_colour : renaming_preset ? rename_colour : transparent_colour;
 
                                     animate background {
                                         duration: 0.2s;
@@ -710,6 +772,7 @@ export component AppWindow inherits Window {
                                             delete_preset = true;
                                         }
                                     } else {
+                                        last_edit = recording_values[current_recording];
                                         dial_values[0] = preset[0];
                                         dial_values[1] = preset[1];
                                         dial_values[2] = preset[2];
@@ -767,7 +830,7 @@ export component AppWindow inherits Window {
                                 source: @image-url("icons/rename.svg");
                                 width: 16px;
                                 height: 16px;
-                                colorize: !rename.enabled ? #5d5d5d : #ffffff;
+                                colorize: rename.enabled ? text_default : text_disabled;
 
                                 animate colorize {
                                     duration: 0.2s;
@@ -790,7 +853,7 @@ export component AppWindow inherits Window {
                             enabled: !recording && !snapping;
 
                             Rectangle {
-                                background: auto_skip ? #3e3e3e : #ffffff00;
+                                background: auto_skip ? highlight_default : transparent_colour;
                                 border-radius: 4px;
 
                                 VerticalLayout {
@@ -800,7 +863,7 @@ export component AppWindow inherits Window {
                                         source: @image-url("icons/skip-forward.svg");
                                         width: 16px;
                                         height: 16px;
-                                        colorize: !auto_next.enabled ? #5d5d5d : #ffffff;
+                                        colorize: auto_next.enabled ? text_default : text_disabled;
         
                                         animate colorize {
                                             duration: 0.2s;
@@ -820,7 +883,7 @@ export component AppWindow inherits Window {
                             enabled: !recording && !snapping;
 
                             Rectangle {
-                                background: loop ? #3e3e3e : #ffffff00;
+                                background: loop ? highlight_default : transparent_colour;
                                 border-radius: 4px;
 
                                 VerticalLayout {
@@ -830,7 +893,7 @@ export component AppWindow inherits Window {
                                         source: @image-url("icons/repeat.svg");
                                         width: 16px;
                                         height: 16px;
-                                        colorize: !repeat.enabled ? #5d5d5d : #ffffff;
+                                        colorize: repeat.enabled ? text_default : text_disabled;
         
                                         animate colorize {
                                             duration: 0.2s;
@@ -854,7 +917,7 @@ export component AppWindow inherits Window {
                                 source: @image-url("icons/lock.svg");
                                 width: 16px;
                                 height: 16px;
-                                colorize: !lock.enabled ? #5d5d5d : #ffffff;
+                                colorize: lock.enabled ? text_default : text_disabled;
 
                                 animate colorize {
                                     duration: 0.2s;
@@ -878,7 +941,7 @@ export component AppWindow inherits Window {
                                 source: @image-url("icons/unlock.svg");
                                 width: 16px;
                                 height: 16px;
-                                colorize: !unlock.enabled ? #5d5d5d : #ffffff;
+                                colorize: unlock.enabled ? text_default : text_disabled;
                             }
 
                             clicked => {
@@ -916,7 +979,7 @@ export component AppWindow inherits Window {
                                 source: @image-url("icons/trash.svg");
                                 width: 16px;
                                 height: 16px;
-                                colorize: !trash.enabled ? #5d5d5d : #ffffff;
+                                colorize: trash.enabled ? text_default : text_disabled;
 
                                 animate colorize {
                                     duration: 0.2s;
@@ -957,8 +1020,8 @@ export component AppWindow inherits Window {
                                 Rectangle {
                                     border-radius: 8px;
                                     border-width: 1px;
-                                    border-color: current_recording == index && !deleting_recording && !renaming_recording && !(new_recording && index == recording_names.length - 1) ? @linear-gradient(90deg, #ffffff 10%, #ffffff00 90%) : #ffffff00;
-                                    background: deleted_recording == index && delete_recording ? #ffffff00 : deleting_recording ? @linear-gradient(90deg, #dc4242 30%, #ed2e2e00 100%) : renaming_recording ? @linear-gradient(90deg, #3f51b5 30%, #3f51b500 100%) : #ffffff00;
+                                    border-color: current_recording == index && !deleting_recording && !renaming_recording && !(new_recording && index == recording_names.length - 1) ? recording_border_default : transparent_colour;
+                                    background: deleted_recording == index && delete_recording ? transparent_colour : deleting_recording ? delete_colour : renaming_recording ? rename_colour : transparent_colour;
                                     
                                     animate background, border-color {
                                         duration: 0.2s;
@@ -1023,12 +1086,7 @@ export component AppWindow inherits Window {
                                         should_delete = true;
                                     } else {
                                         current_recording = index;
-                                        dial_values[0] = recording_values[current_recording][0];
-                                        dial_values[1] = recording_values[current_recording][1];
-                                        dial_values[2] = recording_values[current_recording][2];
-                                        dial_values[3] = recording_values[current_recording][3];
-                                        dial_values[4] = recording_values[current_recording][4];
-                                        dial_values[5] = recording_values[current_recording][5];
+                                        sync_dial_values_with_recording_values();
                                     }
                                 }
                             }
@@ -1048,7 +1106,7 @@ export component AppWindow inherits Window {
 
                     Text {
                         text: error_notification;
-                        color: #dc4242;
+                        color: error_colour;
                         font-weight: 700;
                     }
                 }
@@ -1061,15 +1119,7 @@ export component AppWindow inherits Window {
                         mouse-cursor: pointer;
                         enabled: (playing || snap_playing) && (!recording || !snapping);
 
-                        Rectangle {
-                            border-width: 1px;
-                            border-radius: 8px;
-                            border-color: #ffffff;
-                            background: #242424;
-                            drop-shadow-color: #101010;
-                            drop-shadow-blur: 8px;
-                            drop-shadow-offset-x: 4px;
-                            drop-shadow-offset-y: 4px;
+                        ShadowedRectangle {
                             min-width: 100px;
     
                             HorizontalLayout {
@@ -1080,7 +1130,7 @@ export component AppWindow inherits Window {
                                     source: @image-url("icons/rewind.svg");
                                     width: 20px;
                                     height: 20px;
-                                    colorize: !back.enabled ? #5d5d5d : #ffffff;
+                                    colorize: back.enabled ? text_default : text_disabled;
 
                                     animate colorize {
                                         duration: 0.1s;
@@ -1113,12 +1163,7 @@ export component AppWindow inherits Window {
                                 }
                                 playing_skip = true;
                             }
-                            dial_values[0] = recording_values[current_recording][0];
-                            dial_values[1] = recording_values[current_recording][1];
-                            dial_values[2] = recording_values[current_recording][2];
-                            dial_values[3] = recording_values[current_recording][3];
-                            dial_values[4] = recording_values[current_recording][4];
-                            dial_values[5] = recording_values[current_recording][5];
+                            sync_dial_values_with_recording_values();
                         }
                     }
 
@@ -1126,15 +1171,7 @@ export component AppWindow inherits Window {
                         mouse-cursor: pointer;
                         enabled: control_buttons && !playing && can_play;
 
-                        Rectangle {
-                            border-width: 1px;
-                            border-radius: 8px;
-                            border-color: #ffffff;
-                            background: #242424;
-                            drop-shadow-color: #101010;
-                            drop-shadow-blur: 8px;
-                            drop-shadow-offset-x: 4px;
-                            drop-shadow-offset-y: 4px;
+                        ShadowedRectangle {
                             min-width: 100px;
     
                             HorizontalLayout {
@@ -1146,7 +1183,7 @@ export component AppWindow inherits Window {
                                     source: @image-url("icons/pause.svg");
                                     width: 20px;
                                     height: 20px;
-                                    colorize: snap_play.enabled ? #479cec : #244c72;
+                                    colorize: snap_play.enabled ? snap_default : snap_disabled;
 
                                     animate colorize {
                                         duration: 0.1s;
@@ -1158,7 +1195,7 @@ export component AppWindow inherits Window {
                                     source: @image-url("icons/play.svg");
                                     width: 20px;
                                     height: 20px;
-                                    colorize: snap_play.enabled ? #479cec : #244c72;
+                                    colorize: snap_play.enabled ? snap_default : snap_disabled;
 
                                     animate colorize {
                                         duration: 0.1s;
@@ -1176,12 +1213,7 @@ export component AppWindow inherits Window {
                             } else {
                                 can_play = false;
                                 button_playing = false;
-                                dial_values[0] = recording_values[current_recording][0];
-                                dial_values[1] = recording_values[current_recording][1];
-                                dial_values[2] = recording_values[current_recording][2];
-                                dial_values[3] = recording_values[current_recording][3];
-                                dial_values[4] = recording_values[current_recording][4];
-                                dial_values[5] = recording_values[current_recording][5];
+                                sync_dial_values_with_recording_values();
                             }
                             play_pause();
                         }
@@ -1191,15 +1223,7 @@ export component AppWindow inherits Window {
                         mouse-cursor: pointer;
                         enabled: control_buttons && !snap_playing && can_play;
 
-                        Rectangle {
-                            border-width: 1px;
-                            border-radius: 8px;
-                            border-color: #ffffff;
-                            background: #242424;
-                            drop-shadow-color: #101010;
-                            drop-shadow-blur: 8px;
-                            drop-shadow-offset-x: 4px;
-                            drop-shadow-offset-y: 4px;
+                        ShadowedRectangle {
                             min-width: 100px;
     
                             HorizontalLayout {
@@ -1211,7 +1235,7 @@ export component AppWindow inherits Window {
                                     source: @image-url("icons/pause.svg");
                                     width: 20px;
                                     height: 20px;
-                                    colorize: play.enabled ? #ec4747 : #912e2e;
+                                    colorize: play.enabled ? audio_record_default : audio_record_disabled;
 
                                     animate colorize {
                                         duration: 0.1s;
@@ -1223,7 +1247,7 @@ export component AppWindow inherits Window {
                                     source: @image-url("icons/play.svg");
                                     width: 20px;
                                     height: 20px;
-                                    colorize: play.enabled ? #ec4747 : #912e2e;
+                                    colorize: play.enabled ? audio_record_default : audio_record_disabled;
 
                                     animate colorize {
                                         duration: 0.1s;
@@ -1249,15 +1273,7 @@ export component AppWindow inherits Window {
                         mouse-cursor: pointer;
                         enabled: (playing || snap_playing) && (!recording || !snapping);
 
-                        Rectangle {
-                            border-width: 1px;
-                            border-radius: 8px;
-                            border-color: #ffffff;
-                            background: #242424;
-                            drop-shadow-color: #101010;
-                            drop-shadow-blur: 8px;
-                            drop-shadow-offset-x: 4px;
-                            drop-shadow-offset-y: 4px;
+                        ShadowedRectangle {
                             min-width: 100px;
     
                             HorizontalLayout {
@@ -1268,7 +1284,7 @@ export component AppWindow inherits Window {
                                     source: @image-url("icons/next.svg");
                                     width: 20px;
                                     height: 20px;
-                                    colorize: !next.enabled ? #5d5d5d : #ffffff;
+                                    colorize: next.enabled ? text_default : text_disabled;
 
                                     animate colorize {
                                         duration: 0.1s;
@@ -1301,12 +1317,7 @@ export component AppWindow inherits Window {
                                 }
                                 playing_skip = true;
                             }
-                            dial_values[0] = recording_values[current_recording][0];
-                            dial_values[1] = recording_values[current_recording][1];
-                            dial_values[2] = recording_values[current_recording][2];
-                            dial_values[3] = recording_values[current_recording][3];
-                            dial_values[4] = recording_values[current_recording][4];
-                            dial_values[5] = recording_values[current_recording][5];
+                            sync_dial_values_with_recording_values();
                         }
                     }
                 }
@@ -1318,15 +1329,7 @@ export component AppWindow inherits Window {
                         mouse-cursor: pointer;
                         enabled: !recording && !button_playing && !short_snap;
     
-                        Rectangle {
-                            border-width: 1px;
-                            border-radius: 8px;
-                            border-color: #ffffff;
-                            background: #242424;
-                            drop-shadow-color: #101010;
-                            drop-shadow-blur: 8px;
-                            drop-shadow-offset-x: 6px;
-                            drop-shadow-offset-y: 6px;
+                        ShadowedRectangle {
         
                             HorizontalLayout {
                                 padding: 12px;
@@ -1337,7 +1340,7 @@ export component AppWindow inherits Window {
                                     source: @image-url("icons/stop-circle.svg");
                                     width: 20px;
                                     height: 20px;
-                                    colorize: snapper.enabled ? #479cec : #244c72;
+                                    colorize: snapper.enabled ? snap_default : snap_disabled;
                                 }
     
                                 if !snapping:
@@ -1345,7 +1348,7 @@ export component AppWindow inherits Window {
                                     source: @image-url("icons/circle.svg");
                                     width: 20px;
                                     height: 20px;
-                                    colorize: snapper.enabled ? #479cec : #244c72;
+                                    colorize: snapper.enabled ? snap_default : snap_disabled;
                                 }
                             }
                         }
@@ -1378,15 +1381,7 @@ export component AppWindow inherits Window {
                         mouse-cursor: pointer;
                         enabled: !snapping && !button_playing && !snap_playing && !playing && !short;
     
-                        Rectangle {
-                            border-width: 1px;
-                            border-radius: 8px;
-                            border-color: #ffffff;
-                            background: #242424;
-                            drop-shadow-color: #101010;
-                            drop-shadow-blur: 8px;
-                            drop-shadow-offset-x: 6px;
-                            drop-shadow-offset-y: 6px;
+                        ShadowedRectangle {
         
                             HorizontalLayout {
                                 padding: 12px;
@@ -1397,7 +1392,7 @@ export component AppWindow inherits Window {
                                     source: @image-url("icons/stop-circle.svg");
                                     width: 20px;
                                     height: 20px;
-                                    colorize: recorder.enabled ? #ec4747 : #912e2e;
+                                    colorize: recorder.enabled ? audio_record_default : audio_record_disabled;
                                 }
     
                                 if !recording:
@@ -1405,7 +1400,7 @@ export component AppWindow inherits Window {
                                     source: @image-url("icons/circle.svg");
                                     width: 20px;
                                     height: 20px;
-                                    colorize: recorder.enabled ? #ec4747 : #912e2e;
+                                    colorize: recorder.enabled ? audio_record_default : audio_record_disabled;
                                 }
                             }
                         }

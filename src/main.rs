@@ -188,6 +188,8 @@ impl File {
             let mut track = match audio_manager.add_sub_track(builder) {
                 Ok(value) => value,
                 Err(_) => {
+                    let mut should_play = paused.write().unwrap();
+                    *should_play = false;
                     return Some(Error::PlaybackError);
                 }
             };
@@ -195,6 +197,8 @@ impl File {
             let sound_data = match StaticSoundData::from_file(&file) {
                 Ok(value) => value,
                 Err(_) => {
+                    let mut should_play = paused.write().unwrap();
+                    *should_play = false;
                     return Some(Error::ReadError);
                 }
             };
@@ -204,6 +208,8 @@ impl File {
             let _ = match track.play(sound_data) {
                 Ok(value) => value,
                 Err(_) => {
+                    let mut should_play = paused.write().unwrap();
+                    *should_play = false;
                     return Some(Error::PlaybackError);
                 }
             };
