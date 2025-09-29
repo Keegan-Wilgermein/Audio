@@ -157,13 +157,15 @@ impl File {
         check
     }
 
-    fn play(mut file: String, values: Arc<RwLock<Settings>>, selected_recording: usize, paused: Arc<RwLock<bool>>, snapping: bool, snap_playing: bool, mut snapshot: SnapShot, frame_updates: Arc<RwLock<[i32; 6]>>) -> Option<Error> {
+    fn play(mut file: String, values: Arc<RwLock<Settings>>, selected_recording: usize, paused: Arc<RwLock<bool>>, snapping: bool, snap_playing: bool, mut snapshot: SnapShot, frame_updates: Arc<RwLock<[i32; 6]>>, error_handle: Arc<RwLock<Option<Error>>>) -> Option<Error> {
 
         let state = match thread::Builder::new().name(String::from("Player")).spawn(move || {
 
             let mut audio_manager = match AudioManager::<DefaultBackend>::new(AudioManagerSettings::default()) {
                 Ok(value) => value,
                 Err(_) => {
+                    let mut occured = error_handle.write().unwrap();
+                    *occured = Some(Error::ControllerError);
                     return Some(Error::ControllerError);
                 }
             };
@@ -190,6 +192,8 @@ impl File {
                 Err(_) => {
                     let mut should_play = paused.write().unwrap();
                     *should_play = false;
+                    let mut occured = error_handle.write().unwrap();
+                    *occured = Some(Error::PlaybackError);
                     return Some(Error::PlaybackError);
                 }
             };
@@ -199,6 +203,8 @@ impl File {
                 Err(_) => {
                     let mut should_play = paused.write().unwrap();
                     *should_play = false;
+                    let mut occured = error_handle.write().unwrap();
+                    *occured = Some(Error::ReadError);
                     return Some(Error::ReadError);
                 }
             };
@@ -210,6 +216,8 @@ impl File {
                 Err(_) => {
                     let mut should_play = paused.write().unwrap();
                     *should_play = false;
+                    let mut occured = error_handle.write().unwrap();
+                    *occured = Some(Error::PlaybackError);
                     return Some(Error::PlaybackError);
                 }
             };
@@ -761,7 +769,8 @@ struct Tracker {
     settings: Arc<RwLock<Settings>>,
     recorder: Arc<Mutex<Option<Thread>>>,
     playing: Arc<RwLock<bool>>,
-    snapshot_frame_values: Arc<RwLock<[i32; 6]>>
+    snapshot_frame_values: Arc<RwLock<[i32; 6]>>,
+    error: Arc<RwLock<Option<Error>>>,
 }
 
 impl Tracker {
@@ -771,10 +780,11 @@ impl Tracker {
             recorder: Arc::new(Mutex::new(None)),
             playing: Arc::new(RwLock::new(false)),
             snapshot_frame_values: Arc::new(RwLock::new([0, 0, 0, 0, 0, 0])),
+            error: Arc::new(RwLock::new(None)),
         }
     }
 
-    fn record(self: &Arc<Self>) -> Option<Error> {
+    fn record(self: &Arc<Self>, error_handle: Arc<RwLock<Option<Error>>>) -> Option<Error> {
         let current_thread = Arc::clone(self);
 
         let state = match thread::Builder::new().name(String::from("Recorder")).spawn(move || {
@@ -820,6 +830,8 @@ impl Tracker {
             let mut writer = match WavWriter::create(new_name, audio_spec) {
                 Ok(value) => value,
                 Err(_) => {
+                    let mut occured = error_handle.write().unwrap();
+                    *occured = Some(Error::WriteError);
                     return Some(Error::WriteError);
                 }
             };
@@ -865,6 +877,8 @@ impl Tracker {
                 Ok(_) => {
                 },
                 Err(_) => {
+                    let mut occured = error_handle.write().unwrap();
+                    *occured = Some(Error::RecordError);
                     return Some(Error::RecordError);
                 },
             };
@@ -875,6 +889,8 @@ impl Tracker {
                 Ok(_) => {
                 },
                 Err(_) => {
+                    let mut occured = error_handle.write().unwrap();
+                    *occured = Some(Error::RecordError);
                     return Some(Error::RecordError);
                 },
             };
@@ -1072,6 +1088,8 @@ fn main() -> Result<(), Box<dyn STDError>> {
 
         let tracker_ref_count = Arc::clone(&tracker);
         let poison_count = tracker.clone();
+        
+        let error = tracker.error.clone();
 
         move || {
             let ui = ui_handle.unwrap();
@@ -1079,7 +1097,7 @@ fn main() -> Result<(), Box<dyn STDError>> {
             // SnapShot::update_ui(
 
             if ui.get_recording() {
-                match tracker_ref_count.record() {
+                match tracker_ref_count.record(error.clone()) {
                     Some(error) => {
                         ui.set_error_notification(error.get_text());
                         ui.set_error_recieved(true);
@@ -1124,6 +1142,8 @@ fn main() -> Result<(), Box<dyn STDError>> {
 
         let dials = tracker.snapshot_frame_values.clone();
 
+        let error = tracker.error.clone();
+
         move || {
             let ui = ui_handle.unwrap();
 
@@ -1155,7 +1175,7 @@ fn main() -> Result<(), Box<dyn STDError>> {
                     *dial_values = Recording::parse(&values.recordings[ui.get_current_recording() as usize]);
                 }
 
-                match File::play(format!("{}.wav", file), settings.clone(), ui.get_current_recording() as usize, playing.clone(), ui.get_input_recording(), ui.get_input_playback(), snapshot, dials.clone()) {
+                match File::play(format!("{}.wav", file), settings.clone(), ui.get_current_recording() as usize, playing.clone(), ui.get_input_recording(), ui.get_input_playback(), snapshot, dials.clone(), error.clone()) {
                     Some(error) => {
                         ui.set_error_notification(error.get_text());
                         ui.set_error_recieved(true);
@@ -1221,6 +1241,36 @@ fn main() -> Result<(), Box<dyn STDError>> {
             let dial_values = dials.read().unwrap();
 
             ui.set_current_dial_values(ModelRc::new(VecModel::from(Recording::parse_vec_from_list(*dial_values))));
+        }
+    });
+
+    ui.on_check_for_errors({
+        let ui_handle = ui.as_weak();
+
+        let error = tracker.error.clone();
+
+        move || {
+            let ui = ui_handle.unwrap();
+
+            let occured = error.read().unwrap();
+            match *occured {
+                Some(value) => {
+                    match value {
+                        Error::PlaybackError => {
+                            ui.set_audio_playback(false);
+                            ui.set_input_playback(false);
+                            ui.set_input_recording(false);
+                        },
+                        Error::RecordError => {
+                            ui.set_recording(false);
+                        },
+                        _ => ()
+                    }
+                    ui.set_error_notification(value.get_text());
+                    ui.set_error_recieved(true);
+                },
+                None => ()
+            }
         }
     });
 

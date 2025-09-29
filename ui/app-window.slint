@@ -66,7 +66,7 @@ export component AppWindow inherits Window {
     private property <[[string]]> dial_names: [["Sub Bass", "Bass", "Low Mids"], ["High Mids", "Treble", "Pan"]];
     // Values and edits
     in-out property <[int]> current_dial_values: [0, 0, 0, 0, 0, 0];
-    private property <[int]> previous_dial_values: [0, 0, 0, 0, 0, 0]; // The values that the dials held one edit ago
+    in-out property <[int]> previous_dial_values: [0, 0, 0, 0, 0, 0]; // The values that the dials held one edit ago
     private property <[[int]]> dial_values_when_locked: [[0, 0, 0, 0, 0, 0]]; // The values that the dials held when the lock button was pressed
     out property <bool> dials_edited: false;
     // input_recording
@@ -160,6 +160,7 @@ export component AppWindow inherits Window {
     callback sync_playing_with_ui(); // Syncs the playing value in the backend with the one in the UI
     callback sync_playing_with_backend(); // Syncs the playing value in the UI with the one in the backend
     callback snapshot_dial_update(); // Updates dials with the saved snapshot value
+    callback check_for_errors(); // Checks for errors
 
     // -------- Functions --------
     function sync_current_dial_values_with_recording_values() {
@@ -335,7 +336,8 @@ export component AppWindow inherits Window {
 
     // 10ms interval for updating frames
     // Also checks to see if the audio has finished so it can update the ui
-    // Also handles auto skipping and loopinging
+    // Also handles auto skipping and looping
+    // Also makes sure there aren't any errors that have occured
     Timer {
         interval: 10ms;
         running: input_playback || input_recording || audio_playback;
@@ -369,6 +371,7 @@ export component AppWindow inherits Window {
                     input_playback = false;
                 }
             }
+            check_for_errors();
         }
     }
 
@@ -496,14 +499,12 @@ export component AppWindow inherits Window {
                                             dial_pressed_position = self.pressed-position.x;
                                         }
                                         if self.current-position.x - self.pressed-position.x > next_dial_snap_position {
-                                            previous_dial_values = current_dial_values;
                                             if current_dial_values[index2 + (index * 3)] < 7 {
                                                 current_dial_values[index2 + (index * 3)] += 1;
                                                 previous_dial_snap_position = next_dial_snap_position;
                                                 next_dial_snap_position += snap_by;
                                             }
                                         } else if self.current-position.x - self.pressed-position.x < previous_dial_snap_position {
-                                            previous_dial_values = current_dial_values;
                                             if current_dial_values[index2 + (index * 3)] > -7 {
                                                 current_dial_values[index2 + (index * 3)] -= 1;
                                                 next_dial_snap_position = previous_dial_snap_position;
