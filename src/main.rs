@@ -9,6 +9,7 @@ use slint::{Model, ModelRc, SharedString, ToSharedString, VecModel};
 use qruhear::{RUHear, RUBuffers, rucallback};
 use hound::{WavWriter, SampleFormat, WavSpec};
 use kira::{effect::{eq_filter::{EqFilterBuilder, EqFilterKind}, panning_control::PanningControlBuilder}, sound::static_sound::StaticSoundData, track::{TrackBuilder}, AudioManager, AudioManagerSettings, DefaultBackend, Tween};
+use rand::random_range;
 
 slint::include_modules!();
 
@@ -29,6 +30,7 @@ enum Error {
     SaveFileRenameError,
     PlaybackError,
     ControllerError,
+    ShuffleError,
 }
 
 impl Error {
@@ -41,12 +43,13 @@ impl Error {
             Error::ReadError => SharedString::from("File read failed"),
             Error::RenameError => SharedString::from("Failed to rename file"),
             Error::DeleteError => SharedString::from("Failed to delete file"),
-            Error::FallbackError => SharedString::from("Can't rename to fallback name"),
+            Error::FallbackError => SharedString::from("Name can't contain 'Default taken...'"),
             Error::EmptyError => SharedString::from("Name has to contain something"),
             Error::ExistsError => SharedString::from("Name already exists"),
             Error::SaveFileRenameError => SharedString::from("Can't rename to 'settings'"),
             Error::PlaybackError => SharedString::from("Failed to play audio"),
             Error::ControllerError => SharedString::from("Audio controller crashed"),
+            Error::ShuffleError => SharedString::from("At least three recordings required to shuffle"),
         }
     }
 }
@@ -607,6 +610,23 @@ impl Recording {
         }
     }
 
+    fn shuffle(length: usize) -> Vec<i32> {
+        let mut new = vec![];
+        let mut avaliable = vec![];
+
+        for number in 0..length {
+            avaliable.push(number);
+        }
+
+        for _ in 0..length {
+            let random = random_range(0..avaliable.len());
+            new.push(avaliable[random] as i32);
+            avaliable.remove(random);
+        }
+
+        new
+    }
+
 }
 
 // All settings data
@@ -767,6 +787,7 @@ impl Settings {
 // Keeps track of the settings, the recording thread, whether recordings are being played, and the values of the dials during a set of audio frames
 struct Tracker {
     settings: Arc<RwLock<Settings>>,
+    locked: Arc<RwLock<Recording>>,
     recorder: Arc<Mutex<Option<Thread>>>,
     playing: Arc<RwLock<bool>>,
     snapshot_frame_values: Arc<RwLock<[i32; 6]>>,
@@ -777,6 +798,7 @@ impl Tracker {
     fn new(settings: Settings) -> Tracker {
         Tracker {
             settings: Arc::new(RwLock::new(settings)),
+            locked: Arc::new(RwLock::new(Recording::new(&String::new()))),
             recorder: Arc::new(Mutex::new(None)),
             playing: Arc::new(RwLock::new(false)),
             snapshot_frame_values: Arc::new(RwLock::new([0, 0, 0, 0, 0, 0])),
@@ -1050,6 +1072,51 @@ fn main() -> Result<(), Box<dyn STDError>> {
         }
     });
 
+    ui.on_update_locked_values({
+        let ui_handle = ui.as_weak();
+
+        let settings_handle = tracker.settings.clone();
+
+        let locked_handle = tracker.locked.clone();
+
+        move || {
+            let ui = ui_handle.unwrap();
+
+            let settings = settings_handle.read().unwrap();
+
+            let mut locked = locked_handle.write().unwrap();
+
+            ui.set_dial_values_when_locked(Recording::send_values(&settings.recordings, &settings.get_index_data().recording_length));
+
+            *locked = settings.recordings[ui.get_current_recording() as usize].clone();
+        }
+    });
+
+    ui.on_sync_with_locked_values({
+        let ui_handle = ui.as_weak();
+
+        let settings_handle = tracker.settings.clone();
+
+        let locked_handle = tracker.locked.clone();
+
+        move || {
+            let ui = ui_handle.unwrap();
+
+            let mut settings = settings_handle.write().unwrap();
+
+            let locked = locked_handle.read().unwrap();
+
+            settings.recordings[ui.get_current_recording() as usize].sub_bass = locked.sub_bass;
+            settings.recordings[ui.get_current_recording() as usize].bass = locked.bass;
+            settings.recordings[ui.get_current_recording() as usize].low_mids = locked.low_mids;
+            settings.recordings[ui.get_current_recording() as usize].high_mids = locked.high_mids;
+            settings.recordings[ui.get_current_recording() as usize].treble = locked.treble;
+            settings.recordings[ui.get_current_recording() as usize].pan = locked.pan;
+
+            ui.set_current_dial_values(ModelRc::new(VecModel::from(settings.recordings[ui.get_current_recording() as usize].parse_vec_from_recording())));
+        }
+    });
+
     ui.on_save({
         let ui_handle = ui.as_weak();
 
@@ -1270,6 +1337,25 @@ fn main() -> Result<(), Box<dyn STDError>> {
                     ui.set_error_recieved(true);
                 },
                 None => ()
+            }
+        }
+    });
+
+    ui.on_gen_shuffle({
+        let ui_handle = ui.as_weak();
+
+        let settings_ref_count = tracker.settings.clone();
+
+        move || {
+            let ui = ui_handle.unwrap();
+
+            let settings = settings_ref_count.read().unwrap();
+
+            if settings.recordings.len() > 2 {
+                ui.set_shuffle_order(ModelRc::new(VecModel::from(Recording::shuffle(settings.recordings.len()))));
+            } else {
+                ui.set_error_notification(Error::get_text(Error::ShuffleError));
+                ui.set_error_recieved(true);
             }
         }
     });
