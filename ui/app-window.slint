@@ -10,14 +10,43 @@ export enum PlaybackType {
 
 // -------- UI components --------
 component ShadowedRectangle inherits Rectangle { // Rectangle with a drop shadow and a border
-    border-width: 1px;
     border-radius: 12px;
-    border-color: #ffffff;
     background: #242424;
     drop-shadow-color: #151515;
     drop-shadow-blur: 8px;
     drop-shadow-offset-x: 6px;
     drop-shadow-offset-y: 6px;
+    
+    Rectangle {
+        border-radius: 12px;
+        background: #242424;
+        drop-shadow-color: #7b7b7b;
+        drop-shadow-blur: 1px;
+        drop-shadow-offset-x: -1px;
+        drop-shadow-offset-y: -1px;
+    }
+
+    animate drop-shadow-offset-x, drop-shadow-offset-y {
+         duration: 0.2s;
+    }
+}
+
+component ShadowedDial inherits Rectangle { // Rectangle with a drop shadow and a border
+    border-radius: 12px;
+    background: #242424;
+    drop-shadow-color: #151515;
+    drop-shadow-blur: 8px;
+    drop-shadow-offset-x: 6px;
+    drop-shadow-offset-y: 6px;
+    
+    Rectangle {
+        border-radius: 100px;
+        background: #242424;
+        drop-shadow-color: #7b7b7b;
+        drop-shadow-blur: 1px;
+        drop-shadow-offset-x: -1px;
+        drop-shadow-offset-y: -1px;
+    }
 }
 
 // ---- Text ----
@@ -472,7 +501,7 @@ export component AppWindow inherits Window {
                     
                     VerticalLayout {
                         padding: 12px;
-                        spacing: 12px;
+                        spacing: 16px;
                         alignment: center;
     
                         HeadingSmall {
@@ -490,13 +519,12 @@ export component AppWindow inherits Window {
 
                                 rotator := SwipeGestureHandler {
                                     enabled: (!recording && !input_playback) || input_recording;
-
-                                    ShadowedRectangle {
-                                        border-width: 2px;
+                                        
+                                    ShadowedDial {
                                         border-radius: 100px;
                                         height: 60px;
                                         width: 60px;
-            
+                                        
                                         HorizontalLayout {
                                             padding-top: 12px;
                                             alignment: center;
@@ -562,94 +590,98 @@ export component AppWindow inherits Window {
                 VerticalLayout {
                     spacing: 12px;
 
-                    HorizontalLayout {
-                        alignment: start;
-                        spacing: 8px;
+                    ShadowedRectangle {
 
-                        HeadingLarge {
-                            text: "Presets";
-                            vertical-alignment: center;
-                        }
-
-                        add := BasicButton {
-                            enabled: !locked;
-
-                            StatusImageLarge {
-                                source: @image-url("icons/plus.svg");
-                                colorize: add.enabled ? white : generic_disabled;
-
-                                animate colorize {
-                                    duration: 0.2s;
+                        HorizontalLayout {
+                            padding: 8px;
+                            alignment: start;
+                            spacing: 8px;
+    
+                            HeadingLarge {
+                                text: "Presets";
+                                vertical-alignment: center;
+                            }
+    
+                            add := BasicButton {
+                                enabled: !locked;
+    
+                                StatusImageLarge {
+                                    source: @image-url("icons/plus.svg");
+                                    colorize: add.enabled ? white : generic_disabled;
+    
+                                    animate colorize {
+                                        duration: 0.2s;
+                                    }
+                                }
+    
+                                clicked => {
+                                    new_preset_created = true;
+                                    save();
                                 }
                             }
-
-                            clicked => {
-                                new_preset_created = true;
-                                save();
-                            }
-                        }
-
-                        if preset_renaming_mode:
-                        BasicButton {
-
-                            StatusImageSmall {
-                                source: @image-url("icons/check.svg");
-                            }
-
-                            clicked => {
-                                preset_renaming_mode = !preset_renaming_mode;
-                                preset_renamed = true;
-                            }
-                        }
-
-                        if !preset_renaming_mode:
-                        preset_rename := TouchArea {
-                            mouse-cursor: pointer;
-                            enabled: !locked;
-
-                            StatusImageSmall {
-                                source: @image-url("icons/rename.svg");
-                                colorize: preset_rename.enabled ? white : generic_disabled;
-
-                                animate colorize {
-                                    duration: 0.2s;
+    
+                            if preset_renaming_mode:
+                            BasicButton {
+    
+                                StatusImageSmall {
+                                    source: @image-url("icons/check.svg");
+                                }
+    
+                                clicked => {
+                                    preset_renaming_mode = !preset_renaming_mode;
+                                    preset_renamed = true;
                                 }
                             }
-
-                            clicked => {
-                                preset_deleting_mode = false;
-                                preset_renaming_mode = !preset_renaming_mode;
-                            }
-                        }
-
-                        if preset_deleting_mode:
-                        BasicButton {
-
-                            StatusImageSmall {
-                                source: @image-url("icons/check.svg");
-                            }
-
-                            clicked => {
-                                preset_deleting_mode = !preset_deleting_mode;
-                            }
-                        }
-
-                        if !preset_deleting_mode:
-                        preset_delete := BasicButton {
-                            enabled: !locked;
-
-                            StatusImageSmall {
-                                source: @image-url("icons/trash.svg");
-                                colorize: preset_delete.enabled ? white : generic_disabled;
-
-                                animate colorize {
-                                    duration: 0.2s;
+    
+                            if !preset_renaming_mode:
+                            preset_rename := TouchArea {
+                                mouse-cursor: pointer;
+                                enabled: !locked;
+    
+                                StatusImageSmall {
+                                    source: @image-url("icons/rename.svg");
+                                    colorize: preset_rename.enabled ? white : generic_disabled;
+    
+                                    animate colorize {
+                                        duration: 0.2s;
+                                    }
+                                }
+    
+                                clicked => {
+                                    preset_deleting_mode = false;
+                                    preset_renaming_mode = !preset_renaming_mode;
                                 }
                             }
-
-                            clicked => {
-                                preset_renaming_mode = false;
-                                preset_deleting_mode = !preset_deleting_mode;
+    
+                            if preset_deleting_mode:
+                            BasicButton {
+    
+                                StatusImageSmall {
+                                    source: @image-url("icons/check.svg");
+                                }
+    
+                                clicked => {
+                                    preset_deleting_mode = !preset_deleting_mode;
+                                }
+                            }
+    
+                            if !preset_deleting_mode:
+                            preset_delete := BasicButton {
+                                enabled: !locked;
+    
+                                StatusImageSmall {
+                                    source: @image-url("icons/trash.svg");
+                                    colorize: preset_delete.enabled ? white : generic_disabled;
+    
+                                    animate colorize {
+                                        duration: 0.2s;
+                                    }
+                                }
+    
+                                clicked => {
+                                    preset_renaming_mode = false;
+                                    preset_deleting_mode = !preset_deleting_mode;
+                                }
                             }
                         }
                     }
@@ -838,204 +870,206 @@ export component AppWindow inherits Window {
                 VerticalLayout {
                     spacing: 12px;
 
-                    HorizontalLayout {
-                        alignment: start;
-                        spacing: 8px;
-                        
-                        HeadingLarge {
-                            text: "Recordings";
-                            vertical-alignment: center;
-                        }
+                    ShadowedRectangle {
 
-                        if recording_renaming_mode:
-                        BasicButton {
-
-                            StatusImageSmall {
-                                source: @image-url("icons/check.svg");
+                        HorizontalLayout {
+                            padding: 10px;
+                            alignment: start;
+                            spacing: 8px;
+                            
+                            HeadingLarge {
+                                text: "Recordings";
+                                vertical-alignment: center;
                             }
-
-                            clicked => {
-                                recording_renaming_mode = !recording_renaming_mode;
-                                recording_renamed = true;
-                            }
-                        }
-
-                        if !recording_renaming_mode:
-                        rename := BasicButton {
-                            enabled: !recording && !input_recording && !locked && !audio_or_input_playback;
-
-                            StatusImageSmall {
-                                source: @image-url("icons/rename.svg");
-                                colorize: rename.enabled ? white : generic_disabled;
-
-                                animate colorize {
-                                    duration: 0.2s;
+    
+                            if recording_renaming_mode:
+                            BasicButton {
+    
+                                StatusImageSmall {
+                                    source: @image-url("icons/check.svg");
+                                }
+    
+                                clicked => {
+                                    recording_renaming_mode = !recording_renaming_mode;
+                                    recording_renamed = true;
                                 }
                             }
-
-                            clicked => {
-                                recording_deleting_mode = false;
-                                recording_renaming_mode = !recording_renaming_mode;
-                                set_playing_values(false, false);
-                            }
-                        }
-
-                        should_shuffle := BasicButton {
-                            enabled: !recording && !input_recording;
-
-                            HorizontalLayout {
-
-                                if shuffle:
+    
+                            if !recording_renaming_mode:
+                            rename := BasicButton {
+                                enabled: !recording && !input_recording && !locked && !audio_or_input_playback;
+    
                                 StatusImageSmall {
-                                    source: @image-url("icons/shuffle.svg");
-                                    colorize: should_shuffle.enabled ? white : generic_disabled;
+                                    source: @image-url("icons/rename.svg");
+                                    colorize: rename.enabled ? white : generic_disabled;
     
                                     animate colorize {
                                         duration: 0.2s;
                                     }
                                 }
-
-                                if !shuffle:
+    
+                                clicked => {
+                                    recording_deleting_mode = false;
+                                    recording_renaming_mode = !recording_renaming_mode;
+                                    set_playing_values(false, false);
+                                }
+                            }
+    
+                            should_shuffle := BasicButton {
+                                enabled: !recording && !input_recording;
+    
+                                HorizontalLayout {
+    
+                                    if shuffle:
+                                    StatusImageSmall {
+                                        source: @image-url("icons/shuffle.svg");
+                                        colorize: should_shuffle.enabled ? white : generic_disabled;
+        
+                                        animate colorize {
+                                            duration: 0.2s;
+                                        }
+                                    }
+    
+                                    if !shuffle:
+                                    StatusImageSmall {
+                                        source: @image-url("icons/arrow-right.svg");
+                                        colorize: should_shuffle.enabled ? white : generic_disabled;
+        
+                                        animate colorize {
+                                            duration: 0.2s;
+                                        }
+                                    }
+                                }
+    
+                                clicked => {
+                                    if shuffle {
+                                        shuffle = false;
+                                    } else {
+                                        shuffle = true;
+                                        current_shuffle_index = 0;
+                                        gen_shuffle();
+                                    }
+                                }
+                            }
+    
+                            type := BasicButton {
+                                enabled: !recording && !input_recording;
+    
+                                HorizontalLayout {
+    
+                                    if playback == PlaybackType.AutoNext:
+                                    StatusImageSmall {
+                                        source: @image-url("icons/skip-forward.svg");
+                                        colorize: type.enabled ? white : generic_disabled;
+        
+                                        animate colorize {
+                                            duration: 0.2s;
+                                        }
+                                    }
+    
+                                    if playback == PlaybackType.Loop:
+                                    StatusImageSmall {
+                                        source: @image-url("icons/repeat.svg");
+                                        colorize: type.enabled ? white : generic_disabled;
+        
+                                        animate colorize {
+                                            duration: 0.2s;
+                                        }
+                                    }
+    
+                                    if playback == PlaybackType.None:
+                                    StatusImageSmall {
+                                        source: @image-url("icons/slash.svg");
+                                        colorize: type.enabled ? white : generic_disabled;
+        
+                                        animate colorize {
+                                            duration: 0.2s;
+                                        }
+                                    }
+                                }
+    
+                                clicked => {
+                                    if playback == PlaybackType.AutoNext {
+                                        playback = PlaybackType.Loop;
+                                    } else if playback == PlaybackType.Loop {
+                                        playback = PlaybackType.None;
+                                    } else if playback == PlaybackType.None {
+                                        playback = PlaybackType.AutoNext;
+                                    }
+                                }
+                            }
+    
+                            if locked:
+                            lock := BasicButton {
+                                enabled: !recording && !input_recording && !input_playback;
+    
                                 StatusImageSmall {
-                                    source: @image-url("icons/arrow-right.svg");
-                                    colorize: should_shuffle.enabled ? white : generic_disabled;
+                                    source: @image-url("icons/lock.svg");
+                                    colorize: lock.enabled ? white : generic_disabled;
     
                                     animate colorize {
                                         duration: 0.2s;
                                     }
                                 }
-                            }
-
-                            clicked => {
-                                if shuffle {
-                                    shuffle = false;
-                                } else {
-                                    shuffle = true;
-                                    current_shuffle_index = 0;
-                                    gen_shuffle();
+    
+                                clicked => {
+                                    locked = !locked;
+                                    save_dial_edits();
                                 }
                             }
-                        }
-
-                        type := BasicButton {
-                            enabled: !recording && !input_recording;
-
-                            HorizontalLayout {
-
-                                if playback == PlaybackType.AutoNext:
+    
+                            if !locked:
+                            unlock := BasicButton {
+                                enabled: !recording && !input_recording && !input_playback;
+    
                                 StatusImageSmall {
-                                    source: @image-url("icons/skip-forward.svg");
-                                    colorize: type.enabled ? white : generic_disabled;
+                                    source: @image-url("icons/unlock.svg");
+                                    colorize: unlock.enabled ? white : generic_disabled;
+                                }
+    
+                                clicked => {
+                                    locked = !locked;
+                                    update_locked_values();
+                                    preset_renaming_mode = false;
+                                    preset_deleting_mode = false;
+                                    recording_renaming_mode = false;
+                                    recording_deleting_mode = false;
+                                }
+                            }
+    
+                            if recording_deleting_mode:
+                            BasicButton {
+    
+                                StatusImageSmall {
+                                    source: @image-url("icons/check.svg");
+                                }
+    
+                                clicked => {
+                                    recording_deleting_mode = !recording_deleting_mode;
+                                }
+                            }
+    
+                            if !recording_deleting_mode:
+                            trash := BasicButton {
+                                enabled: !recording && !input_recording && !locked && !audio_or_input_playback;
+    
+                                StatusImageSmall {
+                                    source: @image-url("icons/trash.svg");
+                                    colorize: trash.enabled ? white : generic_disabled;
     
                                     animate colorize {
                                         duration: 0.2s;
                                     }
                                 }
-
-                                if playback == PlaybackType.Loop:
-                                StatusImageSmall {
-                                    source: @image-url("icons/repeat.svg");
-                                    colorize: type.enabled ? white : generic_disabled;
     
-                                    animate colorize {
-                                        duration: 0.2s;
-                                    }
-                                }
-
-                                if playback == PlaybackType.None:
-                                StatusImageSmall {
-                                    source: @image-url("icons/slash.svg");
-                                    colorize: type.enabled ? white : generic_disabled;
-    
-                                    animate colorize {
-                                        duration: 0.2s;
-                                    }
-                                }
-                            }
-
-                            clicked => {
-                                if playback == PlaybackType.AutoNext {
-                                    playback = PlaybackType.Loop;
-                                } else if playback == PlaybackType.Loop {
-                                    playback = PlaybackType.None;
-                                } else if playback == PlaybackType.None {
-                                    playback = PlaybackType.AutoNext;
+                                clicked => {
+                                    recording_deleting_mode = !recording_deleting_mode;
+                                    recording_renaming_mode = false;
+                                    set_playing_values(false, false);
                                 }
                             }
                         }
-
-                        if locked:
-                        lock := BasicButton {
-                            enabled: !recording && !input_recording && !input_playback;
-
-                            StatusImageSmall {
-                                source: @image-url("icons/lock.svg");
-                                colorize: lock.enabled ? white : generic_disabled;
-
-                                animate colorize {
-                                    duration: 0.2s;
-                                }
-                            }
-
-                            clicked => {
-                                locked = !locked;
-                                save_dial_edits();
-                            }
-                        }
-
-                        if !locked:
-                        unlock := BasicButton {
-                            enabled: !recording && !input_recording && !input_playback;
-
-                            StatusImageSmall {
-                                source: @image-url("icons/unlock.svg");
-                                colorize: unlock.enabled ? white : generic_disabled;
-                            }
-
-                            clicked => {
-                                locked = !locked;
-                                update_locked_values();
-                                preset_renaming_mode = false;
-                                preset_deleting_mode = false;
-                                recording_renaming_mode = false;
-                                recording_deleting_mode = false;
-                            }
-                        }
-
-                        if recording_deleting_mode:
-                        BasicButton {
-
-                            StatusImageSmall {
-                                source: @image-url("icons/check.svg");
-                            }
-
-                            clicked => {
-                                recording_deleting_mode = !recording_deleting_mode;
-                            }
-                        }
-
-                        if !recording_deleting_mode:
-                        trash := BasicButton {
-                            enabled: !recording && !input_recording && !locked && !audio_or_input_playback;
-
-                            StatusImageSmall {
-                                source: @image-url("icons/trash.svg");
-                                colorize: trash.enabled ? white : generic_disabled;
-
-                                animate colorize {
-                                    duration: 0.2s;
-                                }
-                            }
-
-                            clicked => {
-                                recording_deleting_mode = !recording_deleting_mode;
-                                recording_renaming_mode = false;
-                                set_playing_values(false, false);
-                            }
-                        }
-
                     }
-
 
                     ScrollView {
                         vertical-scrollbar-policy: always-off;
