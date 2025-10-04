@@ -1352,7 +1352,7 @@ fn main() -> Result<(), Box<dyn STDError>> {
             let settings = settings_ref_count.read().unwrap();
 
             if settings.recordings.len() > 2 {
-                ui.set_shuffle_order(ModelRc::new(VecModel::from(Recording::shuffle(settings.recordings.len()))));
+                ui.set_shuffle_order(ModelRc::new(VecModel::from(Recording::shuffle(settings.recordings.len()))));\
             } else {
                 ui.set_error_notification(Error::get_text(Error::ShuffleError));
                 ui.set_error_recieved(true);

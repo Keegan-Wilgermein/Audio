@@ -188,6 +188,7 @@ export component AppWindow inherits Window {
         if forward { // Checks whehter you skipped forwards or backwards
             if shuffle {
                 if current_shuffle_index == shuffle_order.length - 1 {
+                    gen_shuffle();
                     current_shuffle_index = 0;
                 } else {
                     current_shuffle_index += 1;
@@ -281,6 +282,7 @@ export component AppWindow inherits Window {
             update();
             started = false;
             sync_current_dial_values_with_recording_values();
+            gen_shuffle();
         }
     }
 
@@ -380,20 +382,7 @@ export component AppWindow inherits Window {
                 }
 
                 if playback == PlaybackType.AutoNext {
-                    if shuffle {
-                        current_recording = shuffle_order[current_shuffle_index];
-                        if current_shuffle_index == shuffle_order.length - 1 {
-                            current_shuffle_index = 0;
-                        } else {
-                            current_shuffle_index += 1;
-                        }
-                    } else {
-                        if current_recording < recording_names.length - 1 {
-                            current_recording += 1;
-                        } else {
-                            current_recording = 0;
-                        }
-                    }
+                    calculate_skipped_to_recording(true);
                     sync_with_locked_values();
 
                     play_pause();
