@@ -177,6 +177,7 @@ export component AppWindow inherits Window {
     private property <color> default_background_colour: #242424;
     private property <color> default_drop_shadow_colour: #151515;
     private property <brush> recording_border_colour: @linear-gradient(90deg, #ffffff 10%, #ffffff00 90%);
+    private property <brush> transparent_to_background: @linear-gradient(180deg, error-recieved ? #242424 : #24242400, error-recieved ? #242424 : #24242480 10%, default_background_colour 90%);
     private property <color> white: #ffffff;
     private property <color> generic_disabled: #5d5d5d;
     private property <color> play_and_record_colour: #ec4747;
@@ -343,7 +344,6 @@ export component AppWindow inherits Window {
         running: error-recieved;
 
         triggered => {
-            error_notification = "";
             error-recieved = false;
         }
     }
@@ -579,190 +579,162 @@ export component AppWindow inherits Window {
             }
         }
 
-        // Presets, recordings, and playback controls
-        VerticalLayout {
-            spacing: 12px;
+        Rectangle {
 
-            HorizontalLayout {
-                spacing: 32px;
-
-                // Presets
-                VerticalLayout {
-                    spacing: 12px;
-
-                    ShadowedRectangle {
-
-                        HorizontalLayout {
-                            padding: 8px;
-                            alignment: start;
-                            spacing: 8px;
+            // Presets and recordings
+            VerticalLayout {
+                spacing: 12px;
+                alignment: start;
     
-                            HeadingLarge {
-                                text: "Presets";
-                                vertical-alignment: center;
-                            }
+                HorizontalLayout {
+                    spacing: 32px;
     
-                            add := BasicButton {
-                                enabled: !locked;
+                    // Presets
+                    Rectangle {
+                        height: 100%;
     
-                                StatusImageLarge {
-                                    source: @image-url("icons/plus.svg");
-                                    colorize: add.enabled ? white : generic_disabled;
-    
-                                    animate colorize {
-                                        duration: 0.2s;
-                                    }
-                                }
-    
-                                clicked => {
-                                    new_preset_created = true;
-                                    save();
-                                }
-                            }
-    
-                            if preset_renaming_mode:
-                            BasicButton {
-    
-                                StatusImageSmall {
-                                    source: @image-url("icons/check.svg");
-                                }
-    
-                                clicked => {
-                                    preset_renaming_mode = !preset_renaming_mode;
-                                    preset_renamed = true;
-                                }
-                            }
-    
-                            if !preset_renaming_mode:
-                            preset_rename := TouchArea {
-                                mouse-cursor: pointer;
-                                enabled: !locked;
-    
-                                StatusImageSmall {
-                                    source: @image-url("icons/rename.svg");
-                                    colorize: preset_rename.enabled ? white : generic_disabled;
-    
-                                    animate colorize {
-                                        duration: 0.2s;
-                                    }
-                                }
-    
-                                clicked => {
-                                    preset_deleting_mode = false;
-                                    preset_renaming_mode = !preset_renaming_mode;
-                                }
-                            }
-    
-                            if preset_deleting_mode:
-                            BasicButton {
-    
-                                StatusImageSmall {
-                                    source: @image-url("icons/check.svg");
-                                }
-    
-                                clicked => {
-                                    preset_deleting_mode = !preset_deleting_mode;
-                                }
-                            }
-    
-                            if !preset_deleting_mode:
-                            preset_delete := BasicButton {
-                                enabled: !locked;
-    
-                                StatusImageSmall {
-                                    source: @image-url("icons/trash.svg");
-                                    colorize: preset_delete.enabled ? white : generic_disabled;
-    
-                                    animate colorize {
-                                        duration: 0.2s;
-                                    }
-                                }
-    
-                                clicked => {
-                                    preset_renaming_mode = false;
-                                    preset_deleting_mode = !preset_deleting_mode;
-                                }
-                            }
-                        }
-                    }
-
-                    ScrollView {
-                        vertical-scrollbar-policy: always-off;
-                        
-                        VerticalLayout {
-                            alignment: start;
-                            spacing: preset_deleting_mode && preset_deleted ? 0px : preset_renaming_mode ? 8px : 16px;
-
-                            animate spacing {
-                                duration: 0.3s;
-                                easing: ease-in-out-back;
-                            }
-
+                        ScrollView {
+                            vertical-scrollbar-policy: always-off;
+                                
                             VerticalLayout {
-                                spacing: locked ? 16px : 0px;
                                 alignment: start;
-
+                                padding-top: 48px;
+                                spacing: preset_deleting_mode && preset_deleted ? 0px : preset_renaming_mode ? 8px : 16px;
+    
                                 animate spacing {
                                     duration: 0.3s;
+                                    easing: ease-in-out-back;
                                 }
-
+    
                                 VerticalLayout {
+                                    spacing: locked ? 16px : 0px;
                                     alignment: start;
-                                    spacing: 16px;
-
-                                    reset := BasicButton {
-                                        enabled: (!preset_renaming_mode && !preset_deleting_mode && !input_playback && can_delete) || input_recording;
+    
+                                    animate spacing {
+                                        duration: 0.3s;
+                                    }
+    
+                                    VerticalLayout {
+                                        alignment: start;
+                                        spacing: 16px;
+    
+                                        reset := BasicButton {
+                                            enabled: (!preset_renaming_mode && !preset_deleting_mode && !input_playback && can_delete) || input_recording;
+            
+                                            Rectangle {
+                                                border-radius: 8px;
+                                                background: #ffffff00;
+            
+                                                VerticalLayout {
+                                                    spacing: 4px;
+                                                    alignment: start;
+                        
+                                                    HeadingSmall {
+                                                        text: preset_deleting_mode ? "Can't delete preset" : preset_renaming_mode ? "Can't rename preset" : "Reset";
+                                                    }
+                            
+                                                    NormalText {
+                                                        text: "0  0  0  0  0  0";
+                                                        vertical-alignment: center;
+                                                        color: reset.enabled ? white : generic_disabled;
+            
+                                                        animate color {
+                                                            duration: 0.2s;
+                                                        }
+                                                    }
+                                                }
+                                            }
+            
+                                            clicked => {
+                                                current_dial_values = [0, 0, 0, 0, 0, 0];
+                                                save_dial_edits();
+                                            }
+                                        }
+                                    }
+        
+                                    BasicButton {
+                                        enabled: locked;
         
                                         Rectangle {
                                             border-radius: 8px;
                                             background: #ffffff00;
         
                                             VerticalLayout {
-                                                spacing: 4px;
+                                                spacing: !locked ? 0px : 4px;
                                                 alignment: start;
+        
+                                                animate spacing {
+                                                    duration: 0.3s;
+                                                }
                     
                                                 HeadingSmall {
-                                                    text: preset_deleting_mode ? "Can't delete preset" : preset_renaming_mode ? "Can't rename preset" : "Reset";
+                                                    text: "Restore values";
+                                                    font-size: !locked ? 1px : 12px;
+                                                    opacity: !locked ? 0% : 100%;
+        
+                                                    animate font-size, opacity {
+                                                        duration: 0.3s;
+                                                        easing: ease-in-out-back;
+                                                    }
                                                 }
                         
                                                 NormalText {
-                                                    text: "0  0  0  0  0  0";
+                                                    text: "\{dial_values_when_locked[current_recording][0]}  \{dial_values_when_locked[current_recording][1]}  \{dial_values_when_locked[current_recording][2]}  \{dial_values_when_locked[current_recording][3]}  \{dial_values_when_locked[current_recording][4]}  \{dial_values_when_locked[current_recording][5]}";
                                                     vertical-alignment: center;
-                                                    color: reset.enabled ? white : generic_disabled;
+                                                    font-size: !locked ? 1px : 12px;
+                                                    opacity: !locked ? 0% : 100%;
         
-                                                    animate color {
-                                                        duration: 0.2s;
+                                                    animate font-size, opacity {
+                                                        duration: 0.3s;
+                                                        easing: ease-in-out-back;
                                                     }
                                                 }
                                             }
                                         }
         
                                         clicked => {
-                                            current_dial_values = [0, 0, 0, 0, 0, 0];
-                                            save_dial_edits();
+                                            sync_with_locked_values();
                                         }
                                     }
                                 }
     
+                                for preset[index] in preset_values:
                                 BasicButton {
-                                    enabled: locked;
+                                    enabled: (!preset_renaming_mode && !input_playback) || input_recording;
     
                                     Rectangle {
                                         border-radius: 8px;
-                                        background: #ffffff00;
+                                        background: deleted_preset_index == index && preset_deleted ? transparent_colour : preset_deleting_mode ? delete_colour : preset_renaming_mode ? rename_colour : transparent_colour;
+    
+                                        animate background {
+                                            duration: 0.2s;
+                                        }
     
                                         VerticalLayout {
-                                            spacing: !locked ? 0px : 4px;
+                                            padding: deleted_preset_index == index && preset_deleted ? 0px : preset_deleting_mode || preset_renaming_mode ? 8px: 0px;
+                                            spacing: preset_renaming_mode || (deleted_preset_index == index && preset_deleted) ? 0px : 4px;
                                             alignment: start;
     
-                                            animate spacing {
+                                            animate padding, spacing {
                                                 duration: 0.3s;
+                                                easing: ease-in-out-back;
+                                            }
+    
+                                            if preset_renaming_mode:
+                                            TextInput {
+                                                text: preset_names[index];
+                                                font-weight: 700;
+    
+                                                edited => {
+                                                    preset_names[index] = self.text;
+                                                }
                                             }
                 
+                                            if !preset_renaming_mode:
                                             HeadingSmall {
-                                                text: "Restore values";
-                                                font-size: !locked ? 1px : 12px;
-                                                opacity: !locked ? 0% : 100%;
+                                                text: preset_names[index];
+                                                font-size: (deleted_preset_index == index && preset_deleted) || (new_preset_created && index == preset_names.length - 1) ? 1px : 12px;
+                                                opacity: (deleted_preset_index == index && preset_deleted) || (new_preset_created && index == preset_names.length - 1) ? 0% : 100%;
     
                                                 animate font-size, opacity {
                                                     duration: 0.3s;
@@ -771,10 +743,10 @@ export component AppWindow inherits Window {
                                             }
                     
                                             NormalText {
-                                                text: "\{dial_values_when_locked[current_recording][0]}  \{dial_values_when_locked[current_recording][1]}  \{dial_values_when_locked[current_recording][2]}  \{dial_values_when_locked[current_recording][3]}  \{dial_values_when_locked[current_recording][4]}  \{dial_values_when_locked[current_recording][5]}";
+                                                text: "\{preset[0]}  \{preset[1]}  \{preset[2]}  \{preset[3]}  \{preset[4]}  \{preset[5]}";
                                                 vertical-alignment: center;
-                                                font-size: !locked ? 1px : 12px;
-                                                opacity: !locked ? 0% : 100%;
+                                                font-size: preset_renaming_mode || (deleted_preset_index == index && preset_deleted) || (new_preset_created && index == preset_names.length - 1) ? 1px : 12px;
+                                                opacity: preset_renaming_mode || (deleted_preset_index == index && preset_deleted) || (new_preset_created && index == preset_names.length - 1) ? 0% : 100%;
     
                                                 animate font-size, opacity {
                                                     duration: 0.3s;
@@ -785,381 +757,425 @@ export component AppWindow inherits Window {
                                     }
     
                                     clicked => {
-                                        sync_with_locked_values();
-                                    }
-                                }
-                            }
-
-                            for preset[index] in preset_values:
-                            BasicButton {
-                                enabled: (!preset_renaming_mode && !input_playback) || input_recording;
-
-                                Rectangle {
-                                    border-radius: 8px;
-                                    background: deleted_preset_index == index && preset_deleted ? transparent_colour : preset_deleting_mode ? delete_colour : preset_renaming_mode ? rename_colour : transparent_colour;
-
-                                    animate background {
-                                        duration: 0.2s;
-                                    }
-
-                                    VerticalLayout {
-                                        padding: deleted_preset_index == index && preset_deleted ? 0px : preset_deleting_mode || preset_renaming_mode ? 8px: 0px;
-                                        spacing: preset_renaming_mode || (deleted_preset_index == index && preset_deleted) ? 0px : 4px;
-                                        alignment: start;
-
-                                        animate padding, spacing {
-                                            duration: 0.3s;
-                                            easing: ease-in-out-back;
-                                        }
-
-                                        if preset_renaming_mode:
-                                        TextInput {
-                                            text: preset_names[index];
-                                            font-weight: 700;
-
-                                            edited => {
-                                                preset_names[index] = self.text;
+                                        if preset_deleting_mode {
+                                            if can_delete {
+                                                can_delete = false;
+                                                should_delete = true;
+                                                deleted_preset_index = index;
+                                                preset_deleted = true;
                                             }
+                                        } else {
+                                            current_dial_values = preset;
+                                            save_dial_edits();
                                         }
-            
-                                        if !preset_renaming_mode:
-                                        HeadingSmall {
-                                            text: preset_names[index];
-                                            font-size: (deleted_preset_index == index && preset_deleted) || (new_preset_created && index == preset_names.length - 1) ? 1px : 12px;
-                                            opacity: (deleted_preset_index == index && preset_deleted) || (new_preset_created && index == preset_names.length - 1) ? 0% : 100%;
-
-                                            animate font-size, opacity {
-                                                duration: 0.3s;
-                                                easing: ease-in-out-back;
-                                            }
-                                        }
-                
-                                        NormalText {
-                                            text: "\{preset[0]}  \{preset[1]}  \{preset[2]}  \{preset[3]}  \{preset[4]}  \{preset[5]}";
-                                            vertical-alignment: center;
-                                            font-size: preset_renaming_mode || (deleted_preset_index == index && preset_deleted) || (new_preset_created && index == preset_names.length - 1) ? 1px : 12px;
-                                            opacity: preset_renaming_mode || (deleted_preset_index == index && preset_deleted) || (new_preset_created && index == preset_names.length - 1) ? 0% : 100%;
-
-                                            animate font-size, opacity {
-                                                duration: 0.3s;
-                                                easing: ease-in-out-back;
-                                            }
-                                        }
-                                    }
-                                }
-
-                                clicked => {
-                                    if preset_deleting_mode {
-                                        if can_delete {
-                                            can_delete = false;
-                                            should_delete = true;
-                                            deleted_preset_index = index;
-                                            preset_deleted = true;
-                                        }
-                                    } else {
-                                        current_dial_values = preset;
-                                        save_dial_edits();
                                     }
                                 }
                             }
                         }
-                    }
-                }
-
-                // Recordings
-                VerticalLayout {
-                    spacing: 12px;
-
-                    ShadowedRectangle {
-
-                        HorizontalLayout {
-                            padding: 10px;
-                            alignment: start;
-                            spacing: 8px;
-                            
-                            HeadingLarge {
-                                text: "Recordings";
-                                vertical-alignment: center;
-                            }
     
-                            if recording_renaming_mode:
-                            BasicButton {
-    
-                                StatusImageSmall {
-                                    source: @image-url("icons/check.svg");
-                                }
-    
-                                clicked => {
-                                    recording_renaming_mode = !recording_renaming_mode;
-                                    recording_renamed = true;
-                                }
-                            }
-    
-                            if !recording_renaming_mode:
-                            rename := BasicButton {
-                                enabled: !recording && !input_recording && !locked && !audio_or_input_playback;
-    
-                                StatusImageSmall {
-                                    source: @image-url("icons/rename.svg");
-                                    colorize: rename.enabled ? white : generic_disabled;
-    
-                                    animate colorize {
-                                        duration: 0.2s;
-                                    }
-                                }
-    
-                                clicked => {
-                                    recording_deleting_mode = false;
-                                    recording_renaming_mode = !recording_renaming_mode;
-                                    set_playing_values(false, false);
-                                }
-                            }
-    
-                            should_shuffle := BasicButton {
-                                enabled: !recording && !input_recording;
-    
-                                HorizontalLayout {
-    
-                                    if shuffle:
-                                    StatusImageSmall {
-                                        source: @image-url("icons/shuffle.svg");
-                                        colorize: should_shuffle.enabled ? white : generic_disabled;
-        
-                                        animate colorize {
-                                            duration: 0.2s;
-                                        }
-                                    }
-    
-                                    if !shuffle:
-                                    StatusImageSmall {
-                                        source: @image-url("icons/arrow-right.svg");
-                                        colorize: should_shuffle.enabled ? white : generic_disabled;
-        
-                                        animate colorize {
-                                            duration: 0.2s;
-                                        }
-                                    }
-                                }
-    
-                                clicked => {
-                                    if shuffle {
-                                        shuffle = false;
-                                    } else {
-                                        shuffle = true;
-                                        current_shuffle_index = 0;
-                                        gen_shuffle();
-                                    }
-                                }
-                            }
-    
-                            type := BasicButton {
-                                enabled: !recording && !input_recording;
-    
-                                HorizontalLayout {
-    
-                                    if playback == PlaybackType.AutoNext:
-                                    StatusImageSmall {
-                                        source: @image-url("icons/skip-forward.svg");
-                                        colorize: type.enabled ? white : generic_disabled;
-        
-                                        animate colorize {
-                                            duration: 0.2s;
-                                        }
-                                    }
-    
-                                    if playback == PlaybackType.Loop:
-                                    StatusImageSmall {
-                                        source: @image-url("icons/repeat.svg");
-                                        colorize: type.enabled ? white : generic_disabled;
-        
-                                        animate colorize {
-                                            duration: 0.2s;
-                                        }
-                                    }
-    
-                                    if playback == PlaybackType.None:
-                                    StatusImageSmall {
-                                        source: @image-url("icons/slash.svg");
-                                        colorize: type.enabled ? white : generic_disabled;
-        
-                                        animate colorize {
-                                            duration: 0.2s;
-                                        }
-                                    }
-                                }
-    
-                                clicked => {
-                                    if playback == PlaybackType.AutoNext {
-                                        playback = PlaybackType.Loop;
-                                    } else if playback == PlaybackType.Loop {
-                                        playback = PlaybackType.None;
-                                    } else if playback == PlaybackType.None {
-                                        playback = PlaybackType.AutoNext;
-                                    }
-                                }
-                            }
-    
-                            if locked:
-                            lock := BasicButton {
-                                enabled: !recording && !input_recording && !input_playback;
-    
-                                StatusImageSmall {
-                                    source: @image-url("icons/lock.svg");
-                                    colorize: lock.enabled ? white : generic_disabled;
-    
-                                    animate colorize {
-                                        duration: 0.2s;
-                                    }
-                                }
-    
-                                clicked => {
-                                    locked = !locked;
-                                    save_dial_edits();
-                                }
-                            }
-    
-                            if !locked:
-                            unlock := BasicButton {
-                                enabled: !recording && !input_recording && !input_playback;
-    
-                                StatusImageSmall {
-                                    source: @image-url("icons/unlock.svg");
-                                    colorize: unlock.enabled ? white : generic_disabled;
-                                }
-    
-                                clicked => {
-                                    locked = !locked;
-                                    update_locked_values();
-                                    preset_renaming_mode = false;
-                                    preset_deleting_mode = false;
-                                    recording_renaming_mode = false;
-                                    recording_deleting_mode = false;
-                                }
-                            }
-    
-                            if recording_deleting_mode:
-                            BasicButton {
-    
-                                StatusImageSmall {
-                                    source: @image-url("icons/check.svg");
-                                }
-    
-                                clicked => {
-                                    recording_deleting_mode = !recording_deleting_mode;
-                                }
-                            }
-    
-                            if !recording_deleting_mode:
-                            trash := BasicButton {
-                                enabled: !recording && !input_recording && !locked && !audio_or_input_playback;
-    
-                                StatusImageSmall {
-                                    source: @image-url("icons/trash.svg");
-                                    colorize: trash.enabled ? white : generic_disabled;
-    
-                                    animate colorize {
-                                        duration: 0.2s;
-                                    }
-                                }
-    
-                                clicked => {
-                                    recording_deleting_mode = !recording_deleting_mode;
-                                    recording_renaming_mode = false;
-                                    set_playing_values(false, false);
-                                }
-                            }
-                        }
-                    }
-
-                    ScrollView {
-                        vertical-scrollbar-policy: always-off;
-
                         VerticalLayout {
-                            alignment: start;
-                            spacing: (recording_deleting_mode && recording_deleted) ? 0px : recording_renaming_mode ? 8px : 16px;
-
-                            animate spacing {
-                                duration: 0.3s;
-                                easing: ease-in-out-back;
-                            }
-
-                            for recording[index] in recording_values:
-                            BasicButton {
-                                enabled: !recording_renaming_mode && can_delete && !skipping;
-
-                                Rectangle {
-                                    border-radius: 8px;
-                                    border-width: 1px;
-                                    border-color: current_recording == index && !recording_deleting_mode && !recording_renaming_mode && !(new_recording && index == recording_names.length - 1) ? recording_border_colour : transparent_colour;
-                                    background: deleted_recording_index == index && recording_deleted ? transparent_colour : recording_deleting_mode ? delete_colour : recording_renaming_mode ? rename_colour : transparent_colour;
-                                    
-                                    animate background, border-color {
-                                        duration: 0.2s;
+                            spacing: 12px;
+        
+                            ShadowedRectangle {
+                                height: 0%;
+        
+                                HorizontalLayout {
+                                    padding: 8px;
+                                    alignment: start;
+                                    spacing: 8px;
+            
+                                    HeadingLarge {
+                                        text: "Presets";
+                                        vertical-alignment: center;
                                     }
-                
-                                    VerticalLayout {
-                                        padding: deleted_recording_index == index && recording_deleted ? 0px : recording_deleting_mode || current_recording == index || recording_renaming_mode ? 8px: 0px;
-                                        spacing: recording_renaming_mode || (deleted_recording_index == index && recording_deleted) || (new_recording && index == recording_names.length - 1) ? 0px : 4px;
-                                        alignment: start;
-
-                                        animate padding, spacing {
-                                            duration: 0.3s;
-                                            easing: ease-in-out-back;
-                                        }
-
-                                        if recording_renaming_mode:
-                                        TextInput {
-                                            text: recording_names[index];
-                                            font-weight: 700;
-
-                                            edited => {
-                                                recording_names[index] = self.text;
+            
+                                    add := BasicButton {
+                                        enabled: !locked;
+            
+                                        StatusImageLarge {
+                                            source: @image-url("icons/plus.svg");
+                                            colorize: add.enabled ? white : generic_disabled;
+            
+                                            animate colorize {
+                                                duration: 0.2s;
                                             }
                                         }
             
-                                        if !recording_renaming_mode:
-                                        HeadingSmall {
-                                            text: recording_names[index];
-                                            font-size: recording_renaming_mode || (deleted_recording_index == index && recording_deleted) || (new_recording && index == recording_names.length - 1) ? 1px : 12px;
-                                            opacity: recording_renaming_mode || (deleted_recording_index == index && recording_deleted) || (new_recording && index == recording_names.length - 1) ? 0% : 100%;
-
-                                            animate font-size, opacity {
-                                                duration: 0.3s;
-                                                easing: ease-in-out-back;
-                                            }
-                                        }
-                
-                                        NormalText {
-                                            text: input_recording || locked ? "\{dial_values_when_locked[index][0]}  \{dial_values_when_locked[index][1]}  \{dial_values_when_locked[index][2]}  \{dial_values_when_locked[index][3]}  \{dial_values_when_locked[index][4]}  \{dial_values_when_locked[index][5]}" : "\{recording[0]}  \{recording[1]}  \{recording[2]}  \{recording[3]}  \{recording[4]}  \{recording[5]}";
-                                            vertical-alignment: center;
-                                            font-size: recording_renaming_mode || (deleted_recording_index == index && recording_deleted) || (new_recording && index == recording_names.length - 1) ? 1px : 12px;
-                                            opacity: recording_renaming_mode || (deleted_recording_index == index && recording_deleted) || (new_recording && index == recording_names.length - 1) ? 0% : 100%;
-                                            color: locked || input_recording || input_playback || skipping ? generic_disabled : white;
-
-                                            animate font-size, opacity, color {
-                                                duration: 0.3s;
-                                                easing: ease-in-out-back;
-                                            }
+                                        clicked => {
+                                            new_preset_created = true;
+                                            save();
                                         }
                                     }
-                                }
-
-                                clicked => {
-                                    if recording_deleting_mode {
-                                        can_delete = false;
-                                        deleted_recording_index = index;
-                                        deleted_recording_name = recording_names[index];
-                                        recording_deleted = true;
-                                        should_delete = true;
-                                    } else {
-                                        current_recording = index;
-                                        if audio_or_input_playback {
-                                            skip(false, false);
+            
+                                    if preset_renaming_mode:
+                                    BasicButton {
+            
+                                        StatusImageSmall {
+                                            source: @image-url("icons/check.svg");
                                         }
-                                        sync_current_dial_values_with_recording_values();
+            
+                                        clicked => {
+                                            preset_renaming_mode = !preset_renaming_mode;
+                                            preset_renamed = true;
+                                        }
+                                    }
+            
+                                    if !preset_renaming_mode:
+                                    preset_rename := TouchArea {
+                                        mouse-cursor: pointer;
+                                        enabled: !locked;
+            
+                                        StatusImageSmall {
+                                            source: @image-url("icons/rename.svg");
+                                            colorize: preset_rename.enabled ? white : generic_disabled;
+            
+                                            animate colorize {
+                                                duration: 0.2s;
+                                            }
+                                        }
+            
+                                        clicked => {
+                                            preset_deleting_mode = false;
+                                            preset_renaming_mode = !preset_renaming_mode;
+                                        }
+                                    }
+            
+                                    if preset_deleting_mode:
+                                    BasicButton {
+            
+                                        StatusImageSmall {
+                                            source: @image-url("icons/check.svg");
+                                        }
+            
+                                        clicked => {
+                                            preset_deleting_mode = !preset_deleting_mode;
+                                        }
+                                    }
+            
+                                    if !preset_deleting_mode:
+                                    preset_delete := BasicButton {
+                                        enabled: !locked;
+            
+                                        StatusImageSmall {
+                                            source: @image-url("icons/trash.svg");
+                                            colorize: preset_delete.enabled ? white : generic_disabled;
+            
+                                            animate colorize {
+                                                duration: 0.2s;
+                                            }
+                                        }
+            
+                                        clicked => {
+                                            preset_renaming_mode = false;
+                                            preset_deleting_mode = !preset_deleting_mode;
+                                        }
                                     }
                                 }
                             }
+                        }
+                    }
+    
+                    // Recordings
+                    Rectangle {
+    
+                        ScrollView {
+                            vertical-scrollbar-policy: always-off;
+    
+                            VerticalLayout {
+                                alignment: start;
+                                padding-top: 48px;
+                                spacing: (recording_deleting_mode && recording_deleted) ? 0px : recording_renaming_mode ? 8px : 16px;
+    
+                                animate spacing {
+                                    duration: 0.3s;
+                                    easing: ease-in-out-back;
+                                }
+    
+                                for recording[index] in recording_values:
+                                BasicButton {
+                                    enabled: !recording_renaming_mode && can_delete && !skipping;
+    
+                                    Rectangle {
+                                        border-radius: 8px;
+                                        border-width: 1px;
+                                        border-color: current_recording == index && !recording_deleting_mode && !recording_renaming_mode && !(new_recording && index == recording_names.length - 1) ? recording_border_colour : transparent_colour;
+                                        background: deleted_recording_index == index && recording_deleted ? transparent_colour : recording_deleting_mode ? delete_colour : recording_renaming_mode ? rename_colour : transparent_colour;
+                                        
+                                        animate background, border-color {
+                                            duration: 0.2s;
+                                        }
+                    
+                                        VerticalLayout {
+                                            padding: deleted_recording_index == index && recording_deleted ? 0px : recording_deleting_mode || current_recording == index || recording_renaming_mode ? 8px: 0px;
+                                            spacing: recording_renaming_mode || (deleted_recording_index == index && recording_deleted) || (new_recording && index == recording_names.length - 1) ? 0px : 4px;
+                                            alignment: start;
+    
+                                            animate padding, spacing {
+                                                duration: 0.3s;
+                                                easing: ease-in-out-back;
+                                            }
+    
+                                            if recording_renaming_mode:
+                                            TextInput {
+                                                text: recording_names[index];
+                                                font-weight: 700;
+    
+                                                edited => {
+                                                    recording_names[index] = self.text;
+                                                }
+                                            }
+                
+                                            if !recording_renaming_mode:
+                                            HeadingSmall {
+                                                text: recording_names[index];
+                                                font-size: recording_renaming_mode || (deleted_recording_index == index && recording_deleted) || (new_recording && index == recording_names.length - 1) ? 1px : 12px;
+                                                opacity: recording_renaming_mode || (deleted_recording_index == index && recording_deleted) || (new_recording && index == recording_names.length - 1) ? 0% : 100%;
+    
+                                                animate font-size, opacity {
+                                                    duration: 0.3s;
+                                                    easing: ease-in-out-back;
+                                                }
+                                            }
+                    
+                                            NormalText {
+                                                text: input_recording || locked ? "\{dial_values_when_locked[index][0]}  \{dial_values_when_locked[index][1]}  \{dial_values_when_locked[index][2]}  \{dial_values_when_locked[index][3]}  \{dial_values_when_locked[index][4]}  \{dial_values_when_locked[index][5]}" : "\{recording[0]}  \{recording[1]}  \{recording[2]}  \{recording[3]}  \{recording[4]}  \{recording[5]}";
+                                                vertical-alignment: center;
+                                                font-size: recording_renaming_mode || (deleted_recording_index == index && recording_deleted) || (new_recording && index == recording_names.length - 1) ? 1px : 12px;
+                                                opacity: recording_renaming_mode || (deleted_recording_index == index && recording_deleted) || (new_recording && index == recording_names.length - 1) ? 0% : 100%;
+                                                color: locked || input_recording || input_playback || skipping ? generic_disabled : white;
+    
+                                                animate font-size, opacity, color {
+                                                    duration: 0.3s;
+                                                    easing: ease-in-out-back;
+                                                }
+                                            }
+                                        }
+                                    }
+    
+                                    clicked => {
+                                        if recording_deleting_mode {
+                                            can_delete = false;
+                                            deleted_recording_index = index;
+                                            deleted_recording_name = recording_names[index];
+                                            recording_deleted = true;
+                                            should_delete = true;
+                                        } else {
+                                            current_recording = index;
+                                            if audio_or_input_playback {
+                                                skip(false, false);
+                                            }
+                                            sync_current_dial_values_with_recording_values();
+                                        }
+                                    }
+                                }
+                            }
+                        }
+    
+                        VerticalLayout {
+                            spacing: 12px;
+        
+                            ShadowedRectangle {
+                                height: 0%;
+        
+                                HorizontalLayout {
+                                    padding: 10px;
+                                    alignment: start;
+                                    spacing: 8px;
+                                    
+                                    HeadingLarge {
+                                        text: "Recordings";
+                                        vertical-alignment: center;
+                                    }
+            
+                                    if recording_renaming_mode:
+                                    BasicButton {
+            
+                                        StatusImageSmall {
+                                            source: @image-url("icons/check.svg");
+                                        }
+            
+                                        clicked => {
+                                            recording_renaming_mode = !recording_renaming_mode;
+                                            recording_renamed = true;
+                                        }
+                                    }
+            
+                                    if !recording_renaming_mode:
+                                    rename := BasicButton {
+                                        enabled: !recording && !input_recording && !locked && !audio_or_input_playback;
+            
+                                        StatusImageSmall {
+                                            source: @image-url("icons/rename.svg");
+                                            colorize: rename.enabled ? white : generic_disabled;
+            
+                                            animate colorize {
+                                                duration: 0.2s;
+                                            }
+                                        }
+            
+                                        clicked => {
+                                            recording_deleting_mode = false;
+                                            recording_renaming_mode = !recording_renaming_mode;
+                                            set_playing_values(false, false);
+                                        }
+                                    }
+            
+                                    should_shuffle := BasicButton {
+                                        enabled: !recording && !input_recording;
+            
+                                        HorizontalLayout {
+            
+                                            if shuffle:
+                                            StatusImageSmall {
+                                                source: @image-url("icons/shuffle.svg");
+                                                colorize: should_shuffle.enabled ? white : generic_disabled;
+                
+                                                animate colorize {
+                                                    duration: 0.2s;
+                                                }
+                                            }
+            
+                                            if !shuffle:
+                                            StatusImageSmall {
+                                                source: @image-url("icons/arrow-right.svg");
+                                                colorize: should_shuffle.enabled ? white : generic_disabled;
+                
+                                                animate colorize {
+                                                    duration: 0.2s;
+                                                }
+                                            }
+                                        }
+            
+                                        clicked => {
+                                            if shuffle {
+                                                shuffle = false;
+                                            } else {
+                                                shuffle = true;
+                                                current_shuffle_index = 0;
+                                                gen_shuffle();
+                                            }
+                                        }
+                                    }
+            
+                                    type := BasicButton {
+                                        enabled: !recording && !input_recording;
+            
+                                        HorizontalLayout {
+            
+                                            if playback == PlaybackType.AutoNext:
+                                            StatusImageSmall {
+                                                source: @image-url("icons/skip-forward.svg");
+                                                colorize: type.enabled ? white : generic_disabled;
+                
+                                                animate colorize {
+                                                    duration: 0.2s;
+                                                }
+                                            }
+            
+                                            if playback == PlaybackType.Loop:
+                                            StatusImageSmall {
+                                                source: @image-url("icons/repeat.svg");
+                                                colorize: type.enabled ? white : generic_disabled;
+                
+                                                animate colorize {
+                                                    duration: 0.2s;
+                                                }
+                                            }
+            
+                                            if playback == PlaybackType.None:
+                                            StatusImageSmall {
+                                                source: @image-url("icons/slash.svg");
+                                                colorize: type.enabled ? white : generic_disabled;
+                
+                                                animate colorize {
+                                                    duration: 0.2s;
+                                                }
+                                            }
+                                        }
+            
+                                        clicked => {
+                                            if playback == PlaybackType.AutoNext {
+                                                playback = PlaybackType.Loop;
+                                            } else if playback == PlaybackType.Loop {
+                                                playback = PlaybackType.None;
+                                            } else if playback == PlaybackType.None {
+                                                playback = PlaybackType.AutoNext;
+                                            }
+                                        }
+                                    }
+            
+                                    if locked:
+                                    lock := BasicButton {
+                                        enabled: !recording && !input_recording && !input_playback;
+            
+                                        StatusImageSmall {
+                                            source: @image-url("icons/lock.svg");
+                                            colorize: lock.enabled ? white : generic_disabled;
+            
+                                            animate colorize {
+                                                duration: 0.2s;
+                                            }
+                                        }
+            
+                                        clicked => {
+                                            locked = !locked;
+                                            save_dial_edits();
+                                        }
+                                    }
+            
+                                    if !locked:
+                                    unlock := BasicButton {
+                                        enabled: !recording && !input_recording && !input_playback;
+            
+                                        StatusImageSmall {
+                                            source: @image-url("icons/unlock.svg");
+                                            colorize: unlock.enabled ? white : generic_disabled;
+                                        }
+            
+                                        clicked => {
+                                            locked = !locked;
+                                            update_locked_values();
+                                            preset_renaming_mode = false;
+                                            preset_deleting_mode = false;
+                                            recording_renaming_mode = false;
+                                            recording_deleting_mode = false;
+                                        }
+                                    }
+            
+                                    if recording_deleting_mode:
+                                    BasicButton {
+            
+                                        StatusImageSmall {
+                                            source: @image-url("icons/check.svg");
+                                        }
+            
+                                        clicked => {
+                                            recording_deleting_mode = !recording_deleting_mode;
+                                        }
+                                    }
+            
+                                    if !recording_deleting_mode:
+                                    trash := BasicButton {
+                                        enabled: !recording && !input_recording && !locked && !audio_or_input_playback;
+            
+                                        StatusImageSmall {
+                                            source: @image-url("icons/trash.svg");
+                                            colorize: trash.enabled ? white : generic_disabled;
+            
+                                            animate colorize {
+                                                duration: 0.2s;
+                                            }
+                                        }
+            
+                                        clicked => {
+                                            recording_deleting_mode = !recording_deleting_mode;
+                                            recording_renaming_mode = false;
+                                            set_playing_values(false, false);
+                                        }
+                                    }
+                                }
+                            }
+        
                         }
                     }
                 }
@@ -1167,208 +1183,223 @@ export component AppWindow inherits Window {
 
             // Playback controls
             VerticalLayout {
-                spacing: 12px;
-                height: 0%;
+                alignment: end;
+                
+                Rectangle {
+                    background: transparent_to_background;
 
-                // Error notifications
-                HorizontalLayout {
-                    alignment: center;
-
-                    HeadingSmall {
-                        text: error_notification;
-                        color: error_colour;
+                    animate background {
+                         duration: 0.25s;
                     }
-                }
+                    
+                    VerticalLayout {
+                        spacing: 12px;
 
-                // Control group
-                HorizontalLayout {
-                    spacing: 12px;
-
-                    back := ShadowedButton {
-                        enabled: (audio_playback || input_playback) && (!recording || !input_recording);
-                        min-width: 100px;
-    
+                        // Error notifications
                         HorizontalLayout {
-                            padding: 12px;
                             alignment: center;
+            
+                            HeadingSmall {
+                                text: error_notification;
+                                color: error-recieved ? error_colour : #dc424200;
 
-                            StatusImageLarge {
-                                source: @image-url("icons/rewind.svg");
-                                colorize: back.enabled ? white : generic_disabled;
-
-                                animate colorize {
-                                    duration: 0.1s;
+                                animate color {
+                                     duration: 0.25s;
                                 }
                             }
                         }
-
-                        clicked => {
-                            skip(true, false);
-                            sync_current_dial_values_with_recording_values();
-                        }
-                    }
-
-                    play_inputs := ShadowedButton {
-                        enabled: !audio_playback && playback_allowed && !recording && !input_recording;
-                        min-width: 100px;
-    
+            
+                        // Control group
                         HorizontalLayout {
-                            padding: 12px;
-                            alignment: center;
-
-                            if input_playback:
-                            StatusImageLarge {
-                                source: @image-url("icons/pause.svg");
-                                colorize: play_inputs.enabled ? input_playback_colour : input_playback_disabled;
-
-                                animate colorize {
-                                    duration: 0.1s;
+                            spacing: 12px;
+            
+                            back := ShadowedButton {
+                                enabled: (audio_playback || input_playback) && (!recording || !input_recording);
+                                min-width: 100px;
+            
+                                HorizontalLayout {
+                                    padding: 12px;
+                                    alignment: center;
+            
+                                    StatusImageLarge {
+                                        source: @image-url("icons/rewind.svg");
+                                        colorize: back.enabled ? white : generic_disabled;
+            
+                                        animate colorize {
+                                            duration: 0.1s;
+                                        }
+                                    }
+                                }
+            
+                                clicked => {
+                                    skip(true, false);
+                                    sync_current_dial_values_with_recording_values();
                                 }
                             }
-    
-                            if !input_playback:
-                            StatusImageLarge {
-                                source: @image-url("icons/play.svg");
-                                colorize: play_inputs.enabled ? input_playback_colour : input_playback_disabled;
-
-                                animate colorize {
-                                    duration: 0.1s;
+            
+                            play_inputs := ShadowedButton {
+                                enabled: !audio_playback && playback_allowed && !recording && !input_recording;
+                                min-width: 100px;
+            
+                                HorizontalLayout {
+                                    padding: 12px;
+                                    alignment: center;
+            
+                                    if input_playback:
+                                    StatusImageLarge {
+                                        source: @image-url("icons/pause.svg");
+                                        colorize: play_inputs.enabled ? input_playback_colour : input_playback_disabled;
+            
+                                        animate colorize {
+                                            duration: 0.1s;
+                                        }
+                                    }
+            
+                                    if !input_playback:
+                                    StatusImageLarge {
+                                        source: @image-url("icons/play.svg");
+                                        colorize: play_inputs.enabled ? input_playback_colour : input_playback_disabled;
+            
+                                        animate colorize {
+                                            duration: 0.1s;
+                                        }
+                                    }
+                                }
+            
+                                clicked => {
+                                    set_playing_values(false, true);
+                                }
+                            }
+            
+                            play := ShadowedButton {
+                                enabled: !input_playback && playback_allowed && !recording && !input_recording;
+                                min-width: 100px;
+            
+                                HorizontalLayout {
+                                    padding: 12px;
+                                    alignment: center;
+            
+                                    if audio_playback:
+                                    StatusImageLarge {
+                                        source: @image-url("icons/pause.svg");
+                                        colorize: play.enabled ? play_and_record_colour : play_and_record_disabled;
+            
+                                        animate colorize {
+                                            duration: 0.1s;
+                                        }
+                                    }
+            
+                                    if !audio_playback:
+                                    StatusImageLarge {
+                                        source: @image-url("icons/play.svg");
+                                        colorize: play.enabled ? play_and_record_colour : play_and_record_disabled;
+            
+                                        animate colorize {
+                                            duration: 0.1s;
+                                        }
+                                    }
+                                }
+            
+                                clicked => {
+                                    set_playing_values(true, false);
+                                }
+                            }
+            
+                            next := ShadowedButton {
+                                enabled: (audio_playback || input_playback) && (!recording || !input_recording);
+                                min-width: 100px;
+            
+                                HorizontalLayout {
+                                    padding: 12px;
+                                    alignment: center;
+            
+                                    StatusImageLarge {
+                                        source: @image-url("icons/next.svg");
+                                        colorize: next.enabled ? white : generic_disabled;
+            
+                                        animate colorize {
+                                            duration: 0.1s;
+                                        }
+                                    }
+                                }
+            
+                                clicked => {
+                                    skip(true, true);
+                                    sync_current_dial_values_with_recording_values();
                                 }
                             }
                         }
-
-                        clicked => {
-                            set_playing_values(false, true);
-                        }
-                    }
-
-                    play := ShadowedButton {
-                        enabled: !input_playback && playback_allowed && !recording && !input_recording;
-                        min-width: 100px;
-    
+            
                         HorizontalLayout {
-                            padding: 12px;
-                            alignment: center;
-
-                            if audio_playback:
-                            StatusImageLarge {
-                                source: @image-url("icons/pause.svg");
-                                colorize: play.enabled ? play_and_record_colour : play_and_record_disabled;
-
-                                animate colorize {
-                                    duration: 0.1s;
+                            spacing: 12px;
+            
+                            input_capturer := ShadowedButton {
+                                enabled: !recording && !audio_or_input_playback && !input_recording_timeout;
+                
+                                HorizontalLayout {
+                                    padding: 12px;
+                                    alignment: center;
+            
+                                    if input_recording:
+                                    StatusImageLarge {
+                                        source: @image-url("icons/stop-circle.svg");
+                                        colorize: input_capturer.enabled ? input_playback_colour : input_playback_disabled;
+                                    }
+            
+                                    if !input_recording:
+                                    StatusImageLarge {
+                                        source: @image-url("icons/circle.svg");
+                                        colorize: input_capturer.enabled ? input_playback_colour : input_playback_disabled;
+                                    }
+                                }
+            
+                                clicked => {
+                                    input_recording = !input_recording;
+                                    if input_recording {
+                                        disable_buttons_on_record();
+                                        input_playback = true;
+                                        play_pause();
+                                    } else {
+                                        current_dial_values = dial_values_when_locked[current_recording];
+                                        save_dial_edits();
+                                        input_playback = false;
+                                        play_pause();
+                                    }
+                                    input_recording_timeout = true;
                                 }
                             }
-    
-                            if !audio_playback:
-                            StatusImageLarge {
-                                source: @image-url("icons/play.svg");
-                                colorize: play.enabled ? play_and_record_colour : play_and_record_disabled;
-
-                                animate colorize {
-                                    duration: 0.1s;
+            
+                            recorder := ShadowedButton {
+                                enabled: !input_recording && !audio_or_input_playback && !recording_timeout;
+                
+                                HorizontalLayout {
+                                    padding: 12px;
+                                    alignment: center;
+            
+                                    if recording:
+                                    StatusImageLarge {
+                                        source: @image-url("icons/stop-circle.svg");
+                                        colorize: recorder.enabled ? play_and_record_colour : play_and_record_disabled;
+                                    }
+            
+                                    if !recording:
+                                    StatusImageLarge {
+                                        source: @image-url("icons/circle.svg");
+                                        colorize: recorder.enabled ? play_and_record_colour : play_and_record_disabled;
+                                    }
+                                }
+            
+                                clicked => {
+                                    recording = !recording;
+                                    if recording {
+                                        disable_buttons_on_record();
+                                    } else {
+                                        new_recording = true;
+                                    }
+                                    recording_timeout = true;
+                                    record();
                                 }
                             }
-                        }
-
-                        clicked => {
-                            set_playing_values(true, false);
-                        }
-                    }
-
-                    next := ShadowedButton {
-                        enabled: (audio_playback || input_playback) && (!recording || !input_recording);
-                        min-width: 100px;
-    
-                        HorizontalLayout {
-                            padding: 12px;
-                            alignment: center;
-
-                            StatusImageLarge {
-                                source: @image-url("icons/next.svg");
-                                colorize: next.enabled ? white : generic_disabled;
-
-                                animate colorize {
-                                    duration: 0.1s;
-                                }
-                            }
-                        }
-
-                        clicked => {
-                            skip(true, true);
-                            sync_current_dial_values_with_recording_values();
-                        }
-                    }
-                }
-
-                HorizontalLayout {
-                    spacing: 12px;
-
-                    input_capturer := ShadowedButton {
-                        enabled: !recording && !audio_or_input_playback && !input_recording_timeout;
-        
-                        HorizontalLayout {
-                            padding: 12px;
-                            alignment: center;
-
-                            if input_recording:
-                            StatusImageLarge {
-                                source: @image-url("icons/stop-circle.svg");
-                                colorize: input_capturer.enabled ? input_playback_colour : input_playback_disabled;
-                            }
-
-                            if !input_recording:
-                            StatusImageLarge {
-                                source: @image-url("icons/circle.svg");
-                                colorize: input_capturer.enabled ? input_playback_colour : input_playback_disabled;
-                            }
-                        }
-    
-                        clicked => {
-                            input_recording = !input_recording;
-                            if input_recording {
-                                disable_buttons_on_record();
-                                input_playback = true;
-                                play_pause();
-                            } else {
-                                current_dial_values = dial_values_when_locked[current_recording];
-                                save_dial_edits();
-                                input_playback = false;
-                                play_pause();
-                            }
-                            input_recording_timeout = true;
-                        }
-                    }
-
-                    recorder := ShadowedButton {
-                        enabled: !input_recording && !audio_or_input_playback && !recording_timeout;
-        
-                        HorizontalLayout {
-                            padding: 12px;
-                            alignment: center;
-
-                            if recording:
-                            StatusImageLarge {
-                                source: @image-url("icons/stop-circle.svg");
-                                colorize: recorder.enabled ? play_and_record_colour : play_and_record_disabled;
-                            }
-
-                            if !recording:
-                            StatusImageLarge {
-                                source: @image-url("icons/circle.svg");
-                                colorize: recorder.enabled ? play_and_record_colour : play_and_record_disabled;
-                            }
-                        }
-    
-                        clicked => {
-                            recording = !recording;
-                            if recording {
-                                disable_buttons_on_record();
-                            } else {
-                                new_recording = true;
-                            }
-                            recording_timeout = true;
-                            record();
                         }
                     }
                 }
