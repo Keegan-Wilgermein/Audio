@@ -177,7 +177,7 @@ export component AppWindow inherits Window {
     private property <color> default_background_colour: #242424;
     private property <color> default_drop_shadow_colour: #151515;
     private property <brush> recording_border_colour: @linear-gradient(90deg, #ffffff 10%, #ffffff00 90%);
-    private property <brush> transparent_to_background: @linear-gradient(180deg, error-recieved ? #242424 : #24242400, error-recieved ? #242424 : #24242480 10%, default_background_colour 90%);
+    private property <brush> transparent_to_background: @linear-gradient(180deg, error-recieved ? #242424 : #24242400, default_background_colour);
     private property <color> white: #ffffff;
     private property <color> generic_disabled: #5d5d5d;
     private property <color> play_and_record_colour: #ec4747;
@@ -598,7 +598,8 @@ export component AppWindow inherits Window {
                                 
                             VerticalLayout {
                                 alignment: start;
-                                padding-top: 48px;
+                                padding-top: 56px;
+                                padding-bottom: 112px;
                                 spacing: preset_deleting_mode && preset_deleted ? 0px : preset_renaming_mode ? 8px : 16px;
     
                                 animate spacing {
@@ -780,7 +781,7 @@ export component AppWindow inherits Window {
                                 height: 0%;
         
                                 HorizontalLayout {
-                                    padding: 8px;
+                                    padding: 12px;
                                     alignment: start;
                                     spacing: 8px;
             
@@ -877,13 +878,15 @@ export component AppWindow inherits Window {
     
                     // Recordings
                     Rectangle {
+                        height: 100%;
     
                         ScrollView {
                             vertical-scrollbar-policy: always-off;
     
                             VerticalLayout {
                                 alignment: start;
-                                padding-top: 48px;
+                                padding-top: 56px;
+                                padding-bottom: 112px;
                                 spacing: (recording_deleting_mode && recording_deleted) ? 0px : recording_renaming_mode ? 8px : 16px;
     
                                 animate spacing {
@@ -978,7 +981,7 @@ export component AppWindow inherits Window {
                                 height: 0%;
         
                                 HorizontalLayout {
-                                    padding: 10px;
+                                    padding: 12px;
                                     alignment: start;
                                     spacing: 8px;
                                     
@@ -1270,15 +1273,15 @@ export component AppWindow inherits Window {
                                     set_playing_values(false, true);
                                 }
                             }
-            
+
                             play := ShadowedButton {
                                 enabled: !input_playback && playback_allowed && !recording && !input_recording;
                                 min-width: 100px;
-            
+
                                 HorizontalLayout {
                                     padding: 12px;
                                     alignment: center;
-            
+
                                     if audio_playback:
                                     StatusImageLarge {
                                         source: @image-url("icons/pause.svg");
