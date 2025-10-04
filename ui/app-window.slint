@@ -603,8 +603,8 @@ export component AppWindow inherits Window {
                                 spacing: preset_deleting_mode && preset_deleted ? 0px : preset_renaming_mode ? 8px : 16px;
     
                                 animate spacing {
-                                    duration: 0.3s;
-                                    easing: ease-in-out-back;
+                                    duration: 0.2s;
+                                    easing: ease-in-out-circ;
                                 }
     
                                 VerticalLayout {
@@ -674,8 +674,8 @@ export component AppWindow inherits Window {
                                                     opacity: !locked ? 0% : 100%;
         
                                                     animate font-size, opacity {
-                                                        duration: 0.3s;
-                                                        easing: ease-in-out-back;
+                                                        duration: 0.2s;
+                                                        easing: ease-in-out-circ;
                                                     }
                                                 }
                         
@@ -686,8 +686,8 @@ export component AppWindow inherits Window {
                                                     opacity: !locked ? 0% : 100%;
         
                                                     animate font-size, opacity {
-                                                        duration: 0.3s;
-                                                        easing: ease-in-out-back;
+                                                        duration: 0.2s;
+                                                        easing: ease-in-out-circ;
                                                     }
                                                 }
                                             }
@@ -717,8 +717,8 @@ export component AppWindow inherits Window {
                                             alignment: start;
     
                                             animate padding, spacing {
-                                                duration: 0.3s;
-                                                easing: ease-in-out-back;
+                                                duration: 0.2s;
+                                                easing: ease-in-out-circ;
                                             }
     
                                             if preset_renaming_mode:
@@ -738,8 +738,8 @@ export component AppWindow inherits Window {
                                                 opacity: (deleted_preset_index == index && preset_deleted) || (new_preset_created && index == preset_names.length - 1) ? 0% : 100%;
     
                                                 animate font-size, opacity {
-                                                    duration: 0.3s;
-                                                    easing: ease-in-out-back;
+                                                    duration: 0.2s;
+                                                    easing: ease-in-out-circ;
                                                 }
                                             }
                     
@@ -750,8 +750,8 @@ export component AppWindow inherits Window {
                                                 opacity: preset_renaming_mode || (deleted_preset_index == index && preset_deleted) || (new_preset_created && index == preset_names.length - 1) ? 0% : 100%;
     
                                                 animate font-size, opacity {
-                                                    duration: 0.3s;
-                                                    easing: ease-in-out-back;
+                                                    duration: 0.2s;
+                                                    easing: ease-in-out-circ;
                                                 }
                                             }
                                         }
@@ -890,8 +890,8 @@ export component AppWindow inherits Window {
                                 spacing: (recording_deleting_mode && recording_deleted) ? 0px : recording_renaming_mode ? 8px : 16px;
     
                                 animate spacing {
-                                    duration: 0.3s;
-                                    easing: ease-in-out-back;
+                                    duration: 0.2s;
+                                    easing: ease-in-out-circ;
                                 }
     
                                 for recording[index] in recording_values:
@@ -914,8 +914,8 @@ export component AppWindow inherits Window {
                                             alignment: start;
     
                                             animate padding, spacing {
-                                                duration: 0.3s;
-                                                easing: ease-in-out-back;
+                                                duration: 0.2s;
+                                                easing: ease-in-out-circ;
                                             }
     
                                             if recording_renaming_mode:
@@ -935,8 +935,8 @@ export component AppWindow inherits Window {
                                                 opacity: recording_renaming_mode || (deleted_recording_index == index && recording_deleted) || (new_recording && index == recording_names.length - 1) ? 0% : 100%;
     
                                                 animate font-size, opacity {
-                                                    duration: 0.3s;
-                                                    easing: ease-in-out-back;
+                                                    duration: 0.2s;
+                                                    easing: ease-in-out-circ;
                                                 }
                                             }
                     
@@ -948,8 +948,8 @@ export component AppWindow inherits Window {
                                                 color: locked || input_recording || input_playback || skipping ? generic_disabled : white;
     
                                                 animate font-size, opacity, color {
-                                                    duration: 0.3s;
-                                                    easing: ease-in-out-back;
+                                                    duration: 0.2s;
+                                                    easing: ease-in-out-circ;
                                                 }
                                             }
                                         }
