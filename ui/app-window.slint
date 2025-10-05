@@ -253,19 +253,18 @@ export component AppWindow inherits Window {
         skipping = true;
         if input_playback {
             input_playback = false;
-            if skipped_with_button {
-                calculate_skipped_to_recording(skipped_forward)
-            }
             skipped_while_input_playing = true;
         }
         if audio_playback {
             audio_playback = false;
-            if skipped_with_button {
-                calculate_skipped_to_recording(skipped_forward)
-            }
             skipped_while_audio_playing = true;
         }
-        play_pause();
+        if skipped_with_button {
+            calculate_skipped_to_recording(skipped_forward)
+        }
+        if skipped_while_audio_playing || skipped_while_input_playing {
+            play_pause();
+        }
     }
 
     function set_playing_values(audio: bool, input: bool) {
@@ -1217,7 +1216,7 @@ export component AppWindow inherits Window {
                             spacing: 12px;
             
                             back := ShadowedButton {
-                                enabled: (audio_playback || input_playback) && (!recording || !input_recording);
+                                enabled: !recording || !input_recording;
                                 min-width: 100px;
             
                                 HorizontalLayout {
@@ -1309,7 +1308,7 @@ export component AppWindow inherits Window {
                             }
             
                             next := ShadowedButton {
-                                enabled: (audio_playback || input_playback) && (!recording || !input_recording);
+                                enabled: !recording || !input_recording;
                                 min-width: 100px;
             
                                 HorizontalLayout {
