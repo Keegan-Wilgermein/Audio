@@ -856,7 +856,6 @@ struct Tracker {
     recorder: Arc<Mutex<Option<Thread>>>,
     playing: Arc<RwLock<bool>>,
     snapshot_frame_values: Arc<RwLock<[i32; 6]>>,
-    error: Arc<RwLock<Option<Error>>>,
 }
 
 impl Tracker {
@@ -867,8 +866,17 @@ impl Tracker {
             recorder: Arc::new(Mutex::new(None)),
             playing: Arc::new(RwLock::new(false)),
             snapshot_frame_values: Arc::new(RwLock::new([0, 0, 0, 0, 0, 0])),
-            error: Arc::new(RwLock::new(None)),
         }
+    }
+
+    fn write<T>(handle: Arc<RwLock<T>>, set: T) {
+        let mut writer = handle.write().unwrap();
+        *writer = set;
+    }
+
+    fn read<T: Copy>(handle: Arc<RwLock<T>>) -> T {
+        let reader = handle.read().unwrap();
+        *reader
     }
 
     fn record(self: &Arc<Self>, error_handle: Arc<RwLock<Option<Error>>>) -> Option<Error> {
@@ -1085,16 +1093,16 @@ fn load(file: &str, kind: LoadType) -> Result<DataType, Error> {
 fn main() -> Result<(), Box<dyn STDError>> {
     let ui = AppWindow::new()?;
 
-    let mut setup_error = None;
+    let errors = Arc::new(RwLock::new(None));
 
     // Creates a variable that can be used across threads and move blocks and can be read from without locking
     let tracker = Arc::new(Tracker::new(match load("settings", LoadType::Settings) {
         Ok(DataType::Settings(value)) => value,
         Ok(DataType::SnapShot(_)) => {
-            setup_error = Some(Error::LoadError);
+            Tracker::write(errors.clone(), Some(Error::LoadError));
             match save(DataType::Settings(Settings::new()), "settings") {
                 Some(error) => {
-                    setup_error = Some(error)
+                    Tracker::write(errors.clone(), Some(error));
                 },
                 None => {
                 }
@@ -1102,10 +1110,10 @@ fn main() -> Result<(), Box<dyn STDError>> {
             Settings::new()
         }
         Err(error) => {
-            setup_error = Some(error);
+            Tracker::write(errors.clone(), Some(error));
             match save(DataType::Settings(Settings::new()), "settings") {
                 Some(error) => {
-                    setup_error = Some(error)
+                    Tracker::write(errors.clone(), Some(error));
                 },
                 None => {
                 }
@@ -1119,14 +1127,16 @@ fn main() -> Result<(), Box<dyn STDError>> {
 
         let startup_ref_count = tracker.settings.clone();
 
+        let error_handle = errors.clone();
+
         move || {
             let ui = ui_handle.unwrap();
 
-            match setup_error {
+            match Tracker::read(error_handle.clone()) {
                 Some(error) => {
                     ui.set_error_notification(error.get_text());
                     ui.set_error_recieved(true);
-                    setup_error = None;
+                    Tracker::write(error_handle.clone(), None);
                 },
                 None => {
                 }
@@ -1246,7 +1256,7 @@ fn main() -> Result<(), Box<dyn STDError>> {
         let tracker_ref_count = Arc::clone(&tracker);
         let poison_count = tracker.clone();
         
-        let error = tracker.error.clone();
+        let error_handle = errors.clone();
 
         move || {
             let ui = ui_handle.unwrap();
@@ -1254,7 +1264,7 @@ fn main() -> Result<(), Box<dyn STDError>> {
             // SnapShot::update_ui(
 
             if ui.get_recording() {
-                match tracker_ref_count.record(error.clone()) {
+                match tracker_ref_count.record(error_handle.clone()) {
                     Some(error) => {
                         ui.set_error_notification(error.get_text());
                         ui.set_error_recieved(true);
@@ -1299,7 +1309,7 @@ fn main() -> Result<(), Box<dyn STDError>> {
 
         let dials = tracker.snapshot_frame_values.clone();
 
-        let error = tracker.error.clone();
+        let error_handle = errors.clone();
 
         move || {
             let ui = ui_handle.unwrap();
@@ -1340,7 +1350,7 @@ fn main() -> Result<(), Box<dyn STDError>> {
                         String::new()
                     },
                 };
-                match File::play(format!("{}/{}.wav", path, file), settings.clone(), ui.get_current_recording() as usize, playing.clone(), ui.get_input_recording(), ui.get_input_playback(), snapshot, dials.clone(), error.clone()) {
+                match File::play(format!("{}/{}.wav", path, file), settings.clone(), ui.get_current_recording() as usize, playing.clone(), ui.get_input_recording(), ui.get_input_playback(), snapshot, dials.clone(), error_handle.clone()) {
                     Some(error) => {
                         ui.set_error_notification(error.get_text());
                         ui.set_error_recieved(true);
@@ -1412,13 +1422,13 @@ fn main() -> Result<(), Box<dyn STDError>> {
     ui.on_check_for_errors({
         let ui_handle = ui.as_weak();
 
-        let error = tracker.error.clone();
+        let error_handle = errors.clone();
 
         move || {
             let ui = ui_handle.unwrap();
 
-            let occured = error.read().unwrap();
-            match *occured {
+            let occured = Tracker::read(error_handle.clone());
+            match occured {
                 Some(value) => {
                     match value {
                         Error::PlaybackError => {
