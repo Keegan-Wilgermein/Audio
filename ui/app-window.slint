@@ -311,7 +311,9 @@ export component AppWindow inherits Window {
             update();
             started = false;
             sync_current_dial_values_with_recording_values();
-            gen_shuffle();
+            if recording_names.length > 2 {
+                gen_shuffle();
+            }
         }
     }
 

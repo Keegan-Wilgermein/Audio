@@ -2,7 +2,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 // -------- Imports --------
-use std::{error::Error as STDError, ffi::OsString, fs::{self, remove_file, rename}, sync::{Arc, Mutex, RwLock}, thread::{self, Thread}, time::{Duration, Instant}};
+use std::{env, error::Error as STDError, ffi::OsString, fs::{self, remove_file, rename}, sync::{Arc, Mutex, RwLock}, thread::{self, Thread}, time::{Duration, Instant}};
 use savefile::{load_file, save_file};
 use savefile_derive::Savefile;
 use slint::{Model, ModelRc, SharedString, ToSharedString, VecModel};
@@ -31,6 +31,7 @@ enum Error {
     PlaybackError,
     ControllerError,
     ShuffleError,
+    DirectoryError,
 }
 
 impl Error {
@@ -50,6 +51,7 @@ impl Error {
             Error::PlaybackError => SharedString::from("Failed to play audio"),
             Error::ControllerError => SharedString::from("Audio controller crashed"),
             Error::ShuffleError => SharedString::from("At least three recordings required to shuffle"),
+            Error::DirectoryError => SharedString::from("Couldn't find correct file directory"),
         }
     }
 }
@@ -79,7 +81,7 @@ impl File {
                                         };
                                         names.push(match file_name.into_string() {
                                             Ok(mut value) => {
-                                                File::truncate(&mut value)
+                                                File::truncate(&mut value, ".", 0)
                                             },
                                             Err(_) => String::from("Couldn't read name"),
                                         });
@@ -99,12 +101,17 @@ impl File {
         }
     }
 
-    fn truncate(name: &mut String) -> String {
+    fn truncate(name: &mut String, stop_char: &str, pass: u32) -> String {
         let mut length = name.len() - 1;
+        let mut found = 0;
         loop {
-            if name.ends_with(".") {
+            if name.ends_with(stop_char) {
                 name.remove(length);
-                break;
+                length -= 1;
+                if found == pass {
+                    break;
+                }
+                found += 1;
             } else {
                 if length == 1 {
                     *name = String::from("Invalid file extension");
@@ -118,14 +125,18 @@ impl File {
     }
 
     fn rename(old: &String, name: String) -> Option<Error> {
-        match rename(format!("{}.wav", old), format!("{}.wav", name)) {
+        let path = match File::get_directory() {
+            Ok(value) => value,
+            Err(error) => return Some(error),
+        };
+        match rename(format!("{}/{}.wav", path, old), format!("{}/{}.wav", path, name)) {
             Ok(_) => (),
             Err(_) => {
                 return Some(Error::RenameError);
             },
         };
 
-        match rename(format!("{}.bin", old), format!("{}.bin", name)) {
+        match rename(format!("{}/{}.bin", path, old), format!("{}/{}.bin", path, name)) {
             Ok(_) => (),
             Err(_) => {
                 return Some(Error::RenameError);
@@ -136,13 +147,17 @@ impl File {
     }
 
     fn delete(name: String) -> Option<Error> {
-        match remove_file(format!("./{}.wav", name)) {
+        let path = match File::get_directory() {
+            Ok(value) => value,
+            Err(error) => return Some(error),
+        };
+        match remove_file(format!("{}/{}.wav", path, name)) {
             Ok(_) => (),
             Err(_) => {
                 return Some(Error::DeleteError);
             },
         };
-        match remove_file(format!("./{}.bin", name)) {
+        match remove_file(format!("{}/{}.bin", path, name)) {
             Ok(_) => None,
             Err(_) => Some(Error::DeleteError),
         }
@@ -324,7 +339,7 @@ impl File {
             
             if snapping {
                 snapshot.frames.remove(0);
-                snapshot.save(&File::truncate(&mut file));
+                snapshot.save(&File::truncate(&mut file, ".", 0));
             }
 
             None
@@ -340,6 +355,31 @@ impl File {
         let mut should_play = playing.write().unwrap();
         *should_play = false;
         drop(should_play);
+    }
+
+    fn get_directory() -> Result<String, Error> {
+        let mut error = None;
+        let mut string = String::new();
+        match env::current_exe() {
+            Ok(value) => {
+                let mut name = match value.into_os_string().into_string() {
+                    Ok(value) => value,
+                    Err(_) => {
+                        error = Some(Error::DirectoryError);
+                        string
+                    }
+                };
+                string = File::truncate(&mut name, "/", 2);
+            },
+            Err(_) => {
+                error = Some(Error::DirectoryError);
+            },
+        };
+
+        match error {
+            Some(value) => Err(value),
+            None => Ok(string),
+        }
     }
 }
 
@@ -710,7 +750,15 @@ impl Settings {
 
         // Sync recording data with any changes that might have been made while the app was closed
         if ui.get_started() || ui.get_new_recording() {
-            let file_names = match File::search("./", "wav") {
+            let path = match File::get_directory() {
+                Ok(value) => value,
+                Err(error) => {
+                    ui.set_error_notification(error.get_text());
+                    ui.set_error_recieved(true);
+                    String::new()
+                },
+            };
+            let file_names = match File::search(&path, "wav") {
                 Ok(File::Names(value)) => value,
                 Err(error) => {
                     ui.set_error_notification(error.get_text());
@@ -719,7 +767,7 @@ impl Settings {
                 }
             };
 
-            let mut snapshot_names = match File::search("./", "bin") {
+            let mut snapshot_names = match File::search(&path, "bin") {
                 Ok(File::Names(value)) => value,
                 Err(error) => {
                     ui.set_error_notification(error.get_text());
@@ -819,7 +867,17 @@ impl Tracker {
                 sample_format: SampleFormat::Float,
             };
 
-            let taken_names = match File::search("./", "wav") {
+            let mut occured = error_handle.write().unwrap();
+            let path = match File::get_directory() {
+                Ok(value) => value,
+                Err(_) => {
+                    *occured = Some(Error::WriteError);
+                    String::new()
+                },
+            };
+            drop(occured);
+
+            let taken_names = match File::search(&path, "wav") {
                 Ok(File::Names(value)) => value,
                 Err(_) => vec![String::from("Couldn't read files")],
             };
@@ -849,7 +907,12 @@ impl Tracker {
                 new_name = String::from("Recording 1.wav");
             }
 
-            let mut writer = match WavWriter::create(new_name, audio_spec) {
+            let path = match File::get_directory() {
+                Ok(value) => value,
+                Err(error) => return Some(error),
+            };
+
+            let mut writer = match WavWriter::create(format!("{}/{}", path, new_name), audio_spec) {
                 Ok(value) => value,
                 Err(_) => {
                     let mut occured = error_handle.write().unwrap();
@@ -945,9 +1008,13 @@ impl Tracker {
 
 // -------- Functions --------
 fn save(data: DataType, file: &str) -> Option<Error> {
+    let path = match File::get_directory() {
+        Ok(value) => value,
+        Err(error) => return Some(error),
+    };
     match data {
         DataType::Settings(value) => {
-            match save_file(format!("{}.bin", file), 0, &value) {
+            match save_file(format!("{}/{}.bin", path, file), 0, &value) {
                 Ok(_) => {
                     return None;
                 },
@@ -957,7 +1024,7 @@ fn save(data: DataType, file: &str) -> Option<Error> {
             }
         },
         DataType::SnapShot(value) => {
-            match save_file(format!("{}.bin", file), 0, &value) {
+            match save_file(format!("{}/{}.bin", path, file), 0, &value) {
                 Ok(_) => {
                     return None;
                 },
@@ -970,9 +1037,13 @@ fn save(data: DataType, file: &str) -> Option<Error> {
 }
 
 fn load(file: &str, kind: LoadType) -> Result<DataType, Error> {
+    let path = match File::get_directory() {
+        Ok(value) => value,
+        Err(error) => return Err(error),
+    };
     match kind {
         LoadType::Settings => {
-            match load_file(format!("{}.bin", file), 0) {
+            match load_file(format!("{}/{}.bin", path, file), 0) {
                 Ok(value) => {
                     return Ok(DataType::Settings(value));
                 },
@@ -982,7 +1053,7 @@ fn load(file: &str, kind: LoadType) -> Result<DataType, Error> {
             }
         },
         LoadType::Snapshot => {
-            match load_file(format!("{}.bin", file), 0) {
+            match load_file(format!("{}/{}.bin", path, file), 0) {
                 Ok(value) => {
                     return Ok(DataType::SnapShot(value));
                 },
@@ -1133,6 +1204,8 @@ fn main() -> Result<(), Box<dyn STDError>> {
                 settings.sync(&ui);
             }
 
+            let _ = File::get_directory();
+
             ui.invoke_update();
 
             // Aquires read access to the loaded data
@@ -1242,7 +1315,15 @@ fn main() -> Result<(), Box<dyn STDError>> {
                     *dial_values = Recording::parse(&values.recordings[ui.get_current_recording() as usize]);
                 }
 
-                match File::play(format!("{}.wav", file), settings.clone(), ui.get_current_recording() as usize, playing.clone(), ui.get_input_recording(), ui.get_input_playback(), snapshot, dials.clone(), error.clone()) {
+                let path = match File::get_directory() {
+                    Ok(value) => value,
+                    Err(error) => {
+                        ui.set_error_notification(error.get_text());
+                        ui.set_error_recieved(true);
+                        String::new()
+                    },
+                };
+                match File::play(format!("{}/{}.wav", path, file), settings.clone(), ui.get_current_recording() as usize, playing.clone(), ui.get_input_recording(), ui.get_input_playback(), snapshot, dials.clone(), error.clone()) {
                     Some(error) => {
                         ui.set_error_notification(error.get_text());
                         ui.set_error_recieved(true);
