@@ -10,6 +10,7 @@ use qruhear::{RUHear, RUBuffers, rucallback};
 use hound::{WavWriter, SampleFormat, WavSpec};
 use kira::{effect::{eq_filter::{EqFilterBuilder, EqFilterKind}, panning_control::PanningControlBuilder}, sound::static_sound::StaticSoundData, track::{TrackBuilder}, AudioManager, AudioManagerSettings, DefaultBackend, Tween};
 use rand::random_range;
+use sort;
 
 slint::include_modules!();
 
@@ -94,7 +95,7 @@ impl File {
                         },
                     }
                 }
-                names.sort();
+                sort::introsort(&mut names);
                 Ok(File::Names(names))
             },
             Err(_) => Err(Error::ReadError),
@@ -766,6 +767,22 @@ impl Settings {
                     vec![String::from("Couldn't read files")]
                 }
             };
+
+            if ui.get_new_recording() {
+                let mut index = (file_names.len() - 1) as i32;
+                let mut reverse = file_names.clone();
+                reverse.reverse();
+                for item in reverse {
+                    if item.contains("Default taken...") {
+                        ui.set_new_recording_index(index);
+                        break;
+                    } else if *item == format!("Recording {}", self.recordings.len()) {
+                        ui.set_new_recording_index(index);
+                        break;
+                    }
+                    index -= 1;
+                }
+            }
 
             let mut snapshot_names = match File::search(&path, "bin") {
                 Ok(File::Names(value)) => value,

@@ -455,6 +455,7 @@ dependencies = [
  "savefile-derive",
  "slint",
  "slint-build",
+ "sort",
 ]
 
 [[package]]
@@ -4570,6 +4571,12 @@ dependencies = [
  "windows-sys 0.59.0",
  "x11rb",
 ]
+
+[[package]]
+name = "sort"
+version = "0.8.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "79b736394cbcbad245669dc12a0caff9b2570e9ad81ce9906f5d7831551cb0c5"
 
 [[package]]
 name = "spin_on"

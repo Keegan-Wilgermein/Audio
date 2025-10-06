@@ -444,11 +444,11 @@ export component AppWindow inherits Window {
                     audio_playback = true;
                     play_pause();
                 }
-                skipped_while_audio_playing = false;
-                skipped_while_input_playing = false;
-                skipping = false;
-                skipping_allowed = false;
             }
+            skipped_while_audio_playing = false;
+            skipped_while_input_playing = false;
+            skipping = false;
+            skipping_allowed = false;
         }
     }
 
@@ -601,16 +601,11 @@ export component AppWindow inherits Window {
                                 alignment: start;
                                 padding-top: 56px;
                                 padding-bottom: 112px;
-                                spacing: preset_deleting_mode && preset_deleted ? 0px : preset_renaming_mode ? 8px : 16px;
-    
-                                animate spacing {
-                                    duration: 0.2s;
-                                    easing: ease-in-out-circ;
-                                }
     
                                 VerticalLayout {
                                     spacing: locked ? 16px : 0px;
                                     alignment: start;
+                                    padding-bottom: 4px;
     
                                     animate spacing {
                                         duration: 0.3s;
@@ -701,74 +696,84 @@ export component AppWindow inherits Window {
                                 }
     
                                 for preset[index] in preset_values:
-                                BasicButton {
-                                    enabled: (!preset_renaming_mode && !input_playback) || input_recording;
-    
-                                    Rectangle {
-                                        border-radius: 8px;
-                                        background: deleted_preset_index == index && preset_deleted ? transparent_colour : preset_deleting_mode ? delete_colour : preset_renaming_mode ? rename_colour : transparent_colour;
-    
-                                        animate background {
-                                            duration: 0.2s;
-                                        }
-    
-                                        VerticalLayout {
-                                            padding: deleted_preset_index == index && preset_deleted ? 0px : preset_deleting_mode || preset_renaming_mode ? 8px: 0px;
-                                            spacing: preset_renaming_mode || (deleted_preset_index == index && preset_deleted) ? 0px : 4px;
-                                            alignment: start;
-    
-                                            animate padding, spacing {
-                                                duration: 0.2s;
-                                                easing: ease-in-out-circ;
-                                            }
-    
-                                            if preset_renaming_mode:
-                                            TextInput {
-                                                text: preset_names[index];
-                                                font-weight: 700;
-    
-                                                edited => {
-                                                    preset_names[index] = self.text;
-                                                }
-                                            }
-                
-                                            if !preset_renaming_mode:
-                                            HeadingSmall {
-                                                text: preset_names[index];
-                                                font-size: (deleted_preset_index == index && preset_deleted) || (new_preset_created && index == preset_names.length - 1) ? 1px : 12px;
-                                                opacity: (deleted_preset_index == index && preset_deleted) || (new_preset_created && index == preset_names.length - 1) ? 0% : 100%;
-    
-                                                animate font-size, opacity {
-                                                    duration: 0.2s;
-                                                    easing: ease-in-out-circ;
-                                                }
-                                            }
-                    
-                                            NormalText {
-                                                text: "\{preset[0]}  \{preset[1]}  \{preset[2]}  \{preset[3]}  \{preset[4]}  \{preset[5]}";
-                                                vertical-alignment: center;
-                                                font-size: preset_renaming_mode || (deleted_preset_index == index && preset_deleted) || (new_preset_created && index == preset_names.length - 1) ? 1px : 12px;
-                                                opacity: preset_renaming_mode || (deleted_preset_index == index && preset_deleted) || (new_preset_created && index == preset_names.length - 1) ? 0% : 100%;
-    
-                                                animate font-size, opacity {
-                                                    duration: 0.2s;
-                                                    easing: ease-in-out-circ;
-                                                }
-                                            }
-                                        }
+                                VerticalLayout {
+                                    padding-top: preset_deleting_mode && preset_deleted && (deleted_preset_index + 1 == index || deleted_preset_index == index) ? 0px : preset_renaming_mode ? 4px : 8px;
+                                    padding-bottom: preset_deleting_mode && preset_deleted && (deleted_preset_index - 1 == index || deleted_preset_index == index) ? 0px : preset_renaming_mode ? 4px : 8px;
+
+                                    animate padding-top, padding-bottom {
+                                        duration: 0.2s;
+                                        easing: ease-in-out-circ;
                                     }
-    
-                                    clicked => {
-                                        if preset_deleting_mode {
-                                            if can_delete {
-                                                can_delete = false;
-                                                should_delete = true;
-                                                deleted_preset_index = index;
-                                                preset_deleted = true;
+
+                                    BasicButton {
+                                        enabled: (!preset_renaming_mode && !input_playback) || input_recording;
+
+                                        Rectangle {
+                                            border-radius: 8px;
+                                            background: deleted_preset_index == index && preset_deleted ? transparent_colour : preset_deleting_mode ? delete_colour : preset_renaming_mode ? rename_colour : transparent_colour;
+        
+                                            animate background {
+                                                duration: 0.2s;
                                             }
-                                        } else {
-                                            current_dial_values = preset;
-                                            save_dial_edits();
+        
+                                            VerticalLayout {
+                                                padding: deleted_preset_index == index && preset_deleted ? 0px : preset_deleting_mode || preset_renaming_mode ? 8px: 0px;
+                                                spacing: preset_renaming_mode || (deleted_preset_index == index && preset_deleted) ? 0px : 4px;
+                                                alignment: start;
+        
+                                                animate padding, spacing {
+                                                    duration: 0.2s;
+                                                    easing: ease-in-out-circ;
+                                                }
+        
+                                                if preset_renaming_mode:
+                                                TextInput {
+                                                    text: preset_names[index];
+                                                    font-weight: 700;
+        
+                                                    edited => {
+                                                        preset_names[index] = self.text;
+                                                    }
+                                                }
+                    
+                                                if !preset_renaming_mode:
+                                                HeadingSmall {
+                                                    text: preset_names[index];
+                                                    font-size: (deleted_preset_index == index && preset_deleted) || (new_preset_created && index == preset_names.length - 1) ? 1px : 12px;
+                                                    opacity: (deleted_preset_index == index && preset_deleted) || (new_preset_created && index == preset_names.length - 1) ? 0% : 100%;
+        
+                                                    animate font-size, opacity {
+                                                        duration: 0.2s;
+                                                        easing: ease-in-out-circ;
+                                                    }
+                                                }
+                        
+                                                NormalText {
+                                                    text: "\{preset[0]}  \{preset[1]}  \{preset[2]}  \{preset[3]}  \{preset[4]}  \{preset[5]}";
+                                                    vertical-alignment: center;
+                                                    font-size: preset_renaming_mode || (deleted_preset_index == index && preset_deleted) || (new_preset_created && index == preset_names.length - 1) ? 1px : 12px;
+                                                    opacity: preset_renaming_mode || (deleted_preset_index == index && preset_deleted) || (new_preset_created && index == preset_names.length - 1) ? 0% : 100%;
+        
+                                                    animate font-size, opacity {
+                                                        duration: 0.2s;
+                                                        easing: ease-in-out-circ;
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        clicked => {
+                                            if preset_deleting_mode {
+                                                if can_delete {
+                                                    can_delete = false;
+                                                    should_delete = true;
+                                                    deleted_preset_index = index;
+                                                    preset_deleted = true;
+                                                }
+                                            } else {
+                                                current_dial_values = preset;
+                                                save_dial_edits();
+                                            }
                                         }
                                     }
                                 }
@@ -888,69 +893,73 @@ export component AppWindow inherits Window {
                                 alignment: start;
                                 padding-top: 56px;
                                 padding-bottom: 112px;
-                                spacing: (recording_deleting_mode && recording_deleted) ? 0px : recording_renaming_mode ? 8px : 16px;
-    
-                                animate spacing {
-                                    duration: 0.2s;
-                                    easing: ease-in-out-circ;
-                                }
     
                                 for recording[index] in recording_values:
                                 BasicButton {
-                                    enabled: !recording_renaming_mode && can_delete && !skipping;
-    
-                                    Rectangle {
-                                        border-radius: 8px;
-                                        border-width: 1px;
-                                        border-color: current_recording == index && !recording_deleting_mode && !recording_renaming_mode && !(new_recording && index == recording_names.length - 1) ? recording_border_colour : transparent_colour;
-                                        background: deleted_recording_index == index && recording_deleted ? transparent_colour : recording_deleting_mode ? delete_colour : recording_renaming_mode ? rename_colour : transparent_colour;
-                                        
-                                        animate background, border-color {
+                                    enabled: !recording_renaming_mode && can_delete;
+
+                                    VerticalLayout {
+                                        padding-bottom: (recording_deleting_mode && recording_deleted && (deleted_recording_index - 1 == index || deleted_recording_index == index)) ? 0px : recording_renaming_mode ? 4px : 8px;
+                                        padding-top: (recording_deleting_mode && recording_deleted && (deleted_recording_index + 1 == index || deleted_recording_index == index)) ? 0px : recording_renaming_mode ? 4px : 8px;
+
+                                        animate padding-top, padding-bottom {
                                             duration: 0.2s;
+                                            easing: ease-in-out-circ;
                                         }
-                    
-                                        VerticalLayout {
-                                            padding: deleted_recording_index == index && recording_deleted ? 0px : recording_deleting_mode || current_recording == index || recording_renaming_mode ? 8px: 0px;
-                                            spacing: recording_renaming_mode || (deleted_recording_index == index && recording_deleted) || (new_recording && index == recording_names.length - 1) ? 0px : 4px;
-                                            alignment: start;
-    
-                                            animate padding, spacing {
+
+                                        Rectangle {
+                                            border-radius: 8px;
+                                            border-width: 1px;
+                                            border-color: current_recording == index && !recording_deleting_mode && !recording_renaming_mode && !(new_recording && index == new_recording_index) ? recording_border_colour : transparent_colour;
+                                            background: deleted_recording_index == index && recording_deleted ? transparent_colour : recording_deleting_mode ? delete_colour : recording_renaming_mode ? rename_colour : transparent_colour;
+                                            
+                                            animate background, border-color {
                                                 duration: 0.2s;
-                                                easing: ease-in-out-circ;
                                             }
-    
-                                            if recording_renaming_mode:
-                                            TextInput {
-                                                text: recording_names[index];
-                                                font-weight: 700;
-    
-                                                edited => {
-                                                    recording_names[index] = self.text;
-                                                }
-                                            }
-                
-                                            if !recording_renaming_mode:
-                                            HeadingSmall {
-                                                text: recording_names[index];
-                                                font-size: recording_renaming_mode || (deleted_recording_index == index && recording_deleted) || (new_recording && index == recording_names.length - 1) ? 1px : 12px;
-                                                opacity: recording_renaming_mode || (deleted_recording_index == index && recording_deleted) || (new_recording && index == recording_names.length - 1) ? 0% : 100%;
-    
-                                                animate font-size, opacity {
+                        
+                                            VerticalLayout {
+                                                padding: deleted_recording_index == index && recording_deleted ? 0px : recording_deleting_mode || current_recording == index || recording_renaming_mode ? 8px: 0px;
+                                                spacing: recording_renaming_mode || (deleted_recording_index == index && recording_deleted) || (new_recording && index == new_recording_index) ? 0px : 4px;
+                                                alignment: start;
+        
+                                                animate padding, spacing {
                                                     duration: 0.2s;
                                                     easing: ease-in-out-circ;
                                                 }
-                                            }
+        
+                                                if recording_renaming_mode:
+                                                TextInput {
+                                                    text: recording_names[index];
+                                                    font-weight: 700;
+        
+                                                    edited => {
+                                                        recording_names[index] = self.text;
+                                                    }
+                                                }
                     
-                                            NormalText {
-                                                text: input_recording || locked ? "\{dial_values_when_locked[index][0]}  \{dial_values_when_locked[index][1]}  \{dial_values_when_locked[index][2]}  \{dial_values_when_locked[index][3]}  \{dial_values_when_locked[index][4]}  \{dial_values_when_locked[index][5]}" : "\{recording[0]}  \{recording[1]}  \{recording[2]}  \{recording[3]}  \{recording[4]}  \{recording[5]}";
-                                                vertical-alignment: center;
-                                                font-size: recording_renaming_mode || (deleted_recording_index == index && recording_deleted) || (new_recording && index == recording_names.length - 1) ? 1px : 12px;
-                                                opacity: recording_renaming_mode || (deleted_recording_index == index && recording_deleted) || (new_recording && index == recording_names.length - 1) ? 0% : 100%;
-                                                color: locked || input_recording || input_playback || skipping ? generic_disabled : white;
-    
-                                                animate font-size, opacity, color {
-                                                    duration: 0.2s;
-                                                    easing: ease-in-out-circ;
+                                                if !recording_renaming_mode:
+                                                HeadingSmall {
+                                                    text: recording_names[index];
+                                                    font-size: recording_renaming_mode || (deleted_recording_index == index && recording_deleted) || (new_recording && index == new_recording_index) ? 1px : 12px;
+                                                    opacity: recording_renaming_mode || (deleted_recording_index == index && recording_deleted) || (new_recording && index == new_recording_index) ? 0% : 100%;
+        
+                                                    animate font-size, opacity {
+                                                        duration: 0.2s;
+                                                        easing: ease-in-out-circ;
+                                                    }
+                                                }
+                        
+                                                NormalText {
+                                                    text: input_recording || locked ? "\{dial_values_when_locked[index][0]}  \{dial_values_when_locked[index][1]}  \{dial_values_when_locked[index][2]}  \{dial_values_when_locked[index][3]}  \{dial_values_when_locked[index][4]}  \{dial_values_when_locked[index][5]}" : "\{recording[0]}  \{recording[1]}  \{recording[2]}  \{recording[3]}  \{recording[4]}  \{recording[5]}";
+                                                    vertical-alignment: center;
+                                                    font-size: recording_renaming_mode || (deleted_recording_index == index && recording_deleted) || (new_recording && index == new_recording_index) ? 1px : 12px;
+                                                    opacity: recording_renaming_mode || (deleted_recording_index == index && recording_deleted) || (new_recording && index == new_recording_index) ? 0% : 100%;
+                                                    color: locked || input_recording || input_playback ? generic_disabled : white;
+        
+                                                    animate font-size, opacity, color {
+                                                        duration: 0.2s;
+                                                        easing: ease-in-out-circ;
+                                                    }
                                                 }
                                             }
                                         }
@@ -1236,13 +1245,15 @@ export component AppWindow inherits Window {
                                 }
             
                                 clicked => {
+                                    recording_renaming_mode = false;
+                                    recording_deleting_mode = false;
                                     skip(true, false);
                                     sync_current_dial_values_with_recording_values();
                                 }
                             }
             
                             play_inputs := ShadowedButton {
-                                enabled: !audio_playback && playback_allowed && !recording && !input_recording;
+                                enabled: !audio_playback && playback_allowed && !recording && !input_recording && !skipping;
                                 min-width: 100px;
             
                                 HorizontalLayout {
@@ -1271,12 +1282,16 @@ export component AppWindow inherits Window {
                                 }
             
                                 clicked => {
-                                    set_playing_values(false, true);
+                                    recording_renaming_mode = false;
+                                    recording_deleting_mode = false;
+                                    if !audio_playback {
+                                        set_playing_values(false, true);
+                                    }
                                 }
                             }
 
                             play := ShadowedButton {
-                                enabled: !input_playback && playback_allowed && !recording && !input_recording;
+                                enabled: !input_playback && playback_allowed && !recording && !input_recording && !skipping;
                                 min-width: 100px;
 
                                 HorizontalLayout {
@@ -1305,7 +1320,11 @@ export component AppWindow inherits Window {
                                 }
             
                                 clicked => {
-                                    set_playing_values(true, false);
+                                    recording_renaming_mode = false;
+                                    recording_deleting_mode = false;
+                                    if !input_playback {
+                                        set_playing_values(true, false);
+                                    }
                                 }
                             }
             
@@ -1328,6 +1347,8 @@ export component AppWindow inherits Window {
                                 }
             
                                 clicked => {
+                                    recording_renaming_mode = false;
+                                    recording_deleting_mode = false;
                                     skip(true, true);
                                     sync_current_dial_values_with_recording_values();
                                 }

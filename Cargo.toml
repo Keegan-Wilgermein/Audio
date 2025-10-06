@@ -13,6 +13,7 @@ rand = "0.9.2"
 savefile = "0.19.0"
 savefile-derive = "0.19.0"
 slint = "1.12.1"
+sort = "0.8.5"
 
 [build-dependencies]
 slint-build = "1.12.1"
