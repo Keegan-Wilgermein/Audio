@@ -55,6 +55,11 @@ impl Error {
             Error::DirectoryError => SharedString::from("Couldn't find correct file directory"),
         }
     }
+
+    fn send(self, ui: &AppWindow) {
+        ui.set_error_notification(self.get_text());
+        ui.set_error_recieved(true);
+    }
 }
 
 // File stuff
@@ -183,8 +188,7 @@ impl File {
             let mut audio_manager = match AudioManager::<DefaultBackend>::new(AudioManagerSettings::default()) {
                 Ok(value) => value,
                 Err(_) => {
-                    let mut occured = error_handle.write().unwrap();
-                    *occured = Some(Error::ControllerError);
+                    Tracker::write(error_handle.clone(), Some(Error::ControllerError));
                     return Some(Error::ControllerError);
                 }
             };
@@ -211,8 +215,7 @@ impl File {
                 Err(_) => {
                     let mut should_play = paused.write().unwrap();
                     *should_play = false;
-                    let mut occured = error_handle.write().unwrap();
-                    *occured = Some(Error::PlaybackError);
+                    Tracker::write(error_handle.clone(), Some(Error::PlaybackError));
                     return Some(Error::PlaybackError);
                 }
             };
@@ -222,8 +225,7 @@ impl File {
                 Err(_) => {
                     let mut should_play = paused.write().unwrap();
                     *should_play = false;
-                    let mut occured = error_handle.write().unwrap();
-                    *occured = Some(Error::ReadError);
+                    Tracker::write(error_handle.clone(), Some(Error::ReadError));
                     return Some(Error::ReadError);
                 }
             };
@@ -233,10 +235,7 @@ impl File {
             let _ = match track.play(sound_data) {
                 Ok(value) => value,
                 Err(_) => {
-                    let mut should_play = paused.write().unwrap();
-                    *should_play = false;
-                    let mut occured = error_handle.write().unwrap();
-                    *occured = Some(Error::PlaybackError);
+                    Tracker::write(error_handle.clone(), Some(Error::PlaybackError));
                     return Some(Error::PlaybackError);
                 }
             };
@@ -696,8 +695,10 @@ impl Settings {
         let index_data = self.get_index_data();
 
         let mut dials = [0, 0, 0, 0, 0, 0];
-        for index in 0..6 {
-            dials[index] = ui.get_current_dial_values().row_data(index).unwrap();
+        if self.recordings.len() > 0 {
+            for index in 0..6 {
+                dials[index] = ui.get_current_dial_values().row_data(index).unwrap();
+            }
         }
 
         // Check for new preset creation
@@ -749,46 +750,27 @@ impl Settings {
             };
         }
 
-        // Sync recording data with any changes that might have been made while the app was closed
+        // Sync recording data with any changes that might have been made to the application files
         if ui.get_started() || ui.get_new_recording() {
             let path = match File::get_directory() {
                 Ok(value) => value,
                 Err(error) => {
-                    ui.set_error_notification(error.get_text());
-                    ui.set_error_recieved(true);
+                    error.send(ui);
                     String::new()
                 },
             };
             let file_names = match File::search(&path, "wav") {
                 Ok(File::Names(value)) => value,
                 Err(error) => {
-                    ui.set_error_notification(error.get_text());
-                    ui.set_error_recieved(true);
+                    error.send(ui);
                     vec![String::from("Couldn't read files")]
                 }
             };
 
-            if ui.get_new_recording() {
-                let mut index = (file_names.len() - 1) as i32;
-                let mut reverse = file_names.clone();
-                reverse.reverse();
-                for item in reverse {
-                    if item.contains("Default taken...") {
-                        ui.set_new_recording_index(index);
-                        break;
-                    } else if *item == format!("Recording {}", self.recordings.len()) {
-                        ui.set_new_recording_index(index);
-                        break;
-                    }
-                    index -= 1;
-                }
-            }
-
             let mut snapshot_names = match File::search(&path, "bin") {
                 Ok(File::Names(value)) => value,
                 Err(error) => {
-                    ui.set_error_notification(error.get_text());
-                    ui.set_error_recieved(true);
+                    error.send(ui);
                     vec![String::from("Couldn't read files")]
                 }
             };
@@ -892,15 +874,13 @@ impl Tracker {
                 sample_format: SampleFormat::Float,
             };
 
-            let mut occured = error_handle.write().unwrap();
             let path = match File::get_directory() {
                 Ok(value) => value,
                 Err(_) => {
-                    *occured = Some(Error::WriteError);
+                    Tracker::write(error_handle.clone(), Some(Error::DirectoryError));
                     String::new()
                 },
             };
-            drop(occured);
 
             let taken_names = match File::search(&path, "wav") {
                 Ok(File::Names(value)) => value,
@@ -940,8 +920,7 @@ impl Tracker {
             let mut writer = match WavWriter::create(format!("{}/{}", path, new_name), audio_spec) {
                 Ok(value) => value,
                 Err(_) => {
-                    let mut occured = error_handle.write().unwrap();
-                    *occured = Some(Error::WriteError);
+                    Tracker::write(error_handle.clone(), Some(Error::WriteError));
                     return Some(Error::WriteError);
                 }
             };
@@ -987,8 +966,7 @@ impl Tracker {
                 Ok(_) => {
                 },
                 Err(_) => {
-                    let mut occured = error_handle.write().unwrap();
-                    *occured = Some(Error::RecordError);
+                    Tracker::write(error_handle.clone(), Some(Error::RecordError));
                     return Some(Error::RecordError);
                 },
             };
@@ -999,8 +977,7 @@ impl Tracker {
                 Ok(_) => {
                 },
                 Err(_) => {
-                    let mut occured = error_handle.write().unwrap();
-                    *occured = Some(Error::RecordError);
+                    Tracker::write(error_handle.clone(), Some(Error::RecordError));
                     return Some(Error::RecordError);
                 },
             };
@@ -1134,8 +1111,7 @@ fn main() -> Result<(), Box<dyn STDError>> {
 
             match Tracker::read(error_handle.clone()) {
                 Some(error) => {
-                    ui.set_error_notification(error.get_text());
-                    ui.set_error_recieved(true);
+                    error.send(&ui);
                     Tracker::write(error_handle.clone(), None);
                 },
                 None => {
@@ -1145,7 +1121,6 @@ fn main() -> Result<(), Box<dyn STDError>> {
             if ui.get_started() {
                 // Acquires write access to the loaded data
                 let mut settings = startup_ref_count.write().unwrap();
-
                 settings.sync(&ui);
             }
 
@@ -1184,9 +1159,10 @@ fn main() -> Result<(), Box<dyn STDError>> {
 
             let mut locked = locked_handle.write().unwrap();
 
-            ui.set_dial_values_when_locked(Recording::send_values(&settings.recordings, &settings.get_index_data().recording_length));
-
-            *locked = settings.recordings[ui.get_current_recording() as usize].clone();
+            if settings.recordings.len() > 0 {
+                ui.set_dial_values_when_locked(Recording::send_values(&settings.recordings, &settings.get_index_data().recording_length));
+                *locked = settings.recordings[ui.get_current_recording() as usize].clone();
+            }
         }
     });
 
@@ -1240,8 +1216,7 @@ fn main() -> Result<(), Box<dyn STDError>> {
             if !ui.get_locked() {
                 match save(DataType::Settings((*settings).clone()), "settings") {
                     Some(error) => {
-                        ui.set_error_notification(error.get_text());
-                        ui.set_error_recieved(true);
+                        error.send(&ui);
                     },
                     None => {
                     }
@@ -1254,6 +1229,7 @@ fn main() -> Result<(), Box<dyn STDError>> {
         let ui_handle = ui.as_weak();
 
         let tracker_ref_count = Arc::clone(&tracker);
+
         let poison_count = tracker.clone();
         
         let error_handle = errors.clone();
@@ -1261,13 +1237,10 @@ fn main() -> Result<(), Box<dyn STDError>> {
         move || {
             let ui = ui_handle.unwrap();
 
-            // SnapShot::update_ui(
-
             if ui.get_recording() {
                 match tracker_ref_count.record(error_handle.clone()) {
                     Some(error) => {
-                        ui.set_error_notification(error.get_text());
-                        ui.set_error_recieved(true);
+                        error.send(&ui);
                         poison_count.recorder.clear_poison();
                         ui.set_recording(false);
                         tracker_ref_count.stop();
@@ -1277,6 +1250,8 @@ fn main() -> Result<(), Box<dyn STDError>> {
             } else {
                 tracker_ref_count.stop();
                 ui.invoke_save();
+                ui.set_current_dial_values(ModelRc::new(VecModel::from(Recording::parse_vec_from_list([0, 0, 0, 0, 0, 0]))));
+                ui.invoke_gen_shuffle();
             }
         }
     });
@@ -1289,8 +1264,7 @@ fn main() -> Result<(), Box<dyn STDError>> {
 
             match File::delete(String::from(ui.get_deleted_recording_name())) {
                 Some(error) => {
-                    ui.set_error_notification(error.get_text());
-                    ui.set_error_recieved(true);
+                    error.send(&ui);
                 },
                 None => {
                 },
@@ -1325,8 +1299,7 @@ fn main() -> Result<(), Box<dyn STDError>> {
                     match load(&values.recordings[ui.get_current_recording() as usize].name, LoadType::Snapshot) {
                         Ok(DataType::SnapShot(data)) => data,
                         _ => {
-                            ui.set_error_notification(Error::get_text(Error::LoadError));
-                            ui.set_error_recieved(true);
+                            Error::LoadError.send(&ui);
                             ui.set_audio_playback(false);
                             return;
                         },
@@ -1345,15 +1318,13 @@ fn main() -> Result<(), Box<dyn STDError>> {
                 let path = match File::get_directory() {
                     Ok(value) => value,
                     Err(error) => {
-                        ui.set_error_notification(error.get_text());
-                        ui.set_error_recieved(true);
+                        error.send(&ui);
                         String::new()
                     },
                 };
                 match File::play(format!("{}/{}.wav", path, file), settings.clone(), ui.get_current_recording() as usize, playing.clone(), ui.get_input_recording(), ui.get_input_playback(), snapshot, dials.clone(), error_handle.clone()) {
                     Some(error) => {
-                        ui.set_error_notification(error.get_text());
-                        ui.set_error_recieved(true);
+                        error.send(&ui);
                         ui.set_audio_playback(false);
                         {
                             let mut should_play = playing.write().unwrap();
@@ -1441,8 +1412,7 @@ fn main() -> Result<(), Box<dyn STDError>> {
                         },
                         _ => ()
                     }
-                    ui.set_error_notification(value.get_text());
-                    ui.set_error_recieved(true);
+                    value.send(&ui);
                 },
                 None => ()
             }
@@ -1462,8 +1432,7 @@ fn main() -> Result<(), Box<dyn STDError>> {
             if settings.recordings.len() > 2 {
                 ui.set_shuffle_order(ModelRc::new(VecModel::from(Recording::shuffle(settings.recordings.len()))));
             } else {
-                ui.set_error_notification(Error::get_text(Error::ShuffleError));
-                ui.set_error_recieved(true);
+                Error::ShuffleError.send(&ui);
             }
         }
     });

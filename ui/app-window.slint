@@ -205,7 +205,9 @@ export component AppWindow inherits Window {
 
     // -------- Functions --------
     function sync_current_dial_values_with_recording_values() {
-        current_dial_values = recording_values[current_recording];
+        if recording_names.length > 1 {
+            current_dial_values = recording_values[current_recording];
+        }
     }
 
     function save_dial_edits() {
@@ -467,6 +469,11 @@ export component AppWindow inherits Window {
             }
             recording_deleted = false;
             preset_deleted = false;
+            if recording_names.length > 0 {
+                current_dial_values = recording_values[current_recording];
+            } else {
+                current_dial_values = [0, 0, 0, 0, 0, 0];
+            }
         }
     }
 
@@ -555,14 +562,18 @@ export component AppWindow inherits Window {
                                                 current_dial_values[index2 + (index * 3)] += 1;
                                                 previous_dial_snap_position = next_dial_snap_position;
                                                 next_dial_snap_position += snap_by;
-                                                save_dial_edits();
+                                                if recording_names.length > 0 {
+                                                    save_dial_edits();
+                                                }
                                             }
                                         } else if self.current-position.x - self.pressed-position.x < previous_dial_snap_position {
                                             if current_dial_values[index2 + (index * 3)] > -7 {
                                                 current_dial_values[index2 + (index * 3)] -= 1;
                                                 next_dial_snap_position = previous_dial_snap_position;
                                                 previous_dial_snap_position -= snap_by;
-                                                save_dial_edits();
+                                                if recording_names.length > 0 {
+                                                    save_dial_edits();
+                                                }
                                             }
                                         }
                                     }
@@ -1227,7 +1238,7 @@ export component AppWindow inherits Window {
                             spacing: 12px;
             
                             back := ShadowedButton {
-                                enabled: !recording || !input_recording;
+                                enabled: (!recording || !input_recording) && recording_names.length > 0;
                                 min-width: 100px;
             
                                 HorizontalLayout {
@@ -1253,7 +1264,7 @@ export component AppWindow inherits Window {
                             }
             
                             play_inputs := ShadowedButton {
-                                enabled: !audio_playback && playback_allowed && !recording && !input_recording && !skipping;
+                                enabled: !audio_playback && playback_allowed && !recording && !input_recording && !skipping && recording_names.length > 0;
                                 min-width: 100px;
             
                                 HorizontalLayout {
@@ -1291,7 +1302,7 @@ export component AppWindow inherits Window {
                             }
 
                             play := ShadowedButton {
-                                enabled: !input_playback && playback_allowed && !recording && !input_recording && !skipping;
+                                enabled: !input_playback && playback_allowed && !recording && !input_recording && !skipping && recording_names.length > 0;
                                 min-width: 100px;
 
                                 HorizontalLayout {
@@ -1329,7 +1340,7 @@ export component AppWindow inherits Window {
                             }
             
                             next := ShadowedButton {
-                                enabled: !recording || !input_recording;
+                                enabled: (!recording || !input_recording) && recording_names.length > 0;
                                 min-width: 100px;
             
                                 HorizontalLayout {
@@ -1359,7 +1370,7 @@ export component AppWindow inherits Window {
                             spacing: 12px;
             
                             input_capturer := ShadowedButton {
-                                enabled: !recording && !audio_or_input_playback && !input_recording_timeout;
+                                enabled: !recording && !audio_or_input_playback && !input_recording_timeout && recording_names.length > 0;
                 
                                 HorizontalLayout {
                                     padding: 12px;
