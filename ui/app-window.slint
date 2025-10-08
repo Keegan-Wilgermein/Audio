@@ -153,7 +153,6 @@ export component AppWindow inherits Window {
     in-out property <bool> recording: false; // Whether a recording is in progress
     in-out property <bool> new_recording: false;
     private property <bool> recording_timeout: false; // Disables the recording button for a short period to prevent spamming
-    in-out property <int> new_recording_index: 0; // Where in the list to create the new recording, used purely for animation purposes
 
     // ---- Input playback ----
     in-out property <bool> input_playback: false; // True when playing back audio and recorded inputs
@@ -381,18 +380,6 @@ export component AppWindow inherits Window {
         }
     }
 
-    // Periodically check for file changes
-    Timer {
-        interval: 5s;
-        running: !recording_renaming_mode && !preset_renaming_mode && !recording && !audio_or_input_playback && !input_recording && !recording_deleting_mode && !preset_deleting_mode;
-
-        triggered => {
-            started = true;
-            save();
-            started = false;
-        }
-    }
-
     // 10ms interval for updating frames
     // Also checks to see if the audio has finished so it can update the ui
     // Also handles auto skipping and looping
@@ -474,6 +461,7 @@ export component AppWindow inherits Window {
             } else {
                 current_dial_values = [0, 0, 0, 0, 0, 0];
             }
+            gen_shuffle();
         }
     }
 
@@ -921,7 +909,7 @@ export component AppWindow inherits Window {
                                         Rectangle {
                                             border-radius: 8px;
                                             border-width: 1px;
-                                            border-color: current_recording == index && !recording_deleting_mode && !recording_renaming_mode && !(new_recording && index == new_recording_index) ? recording_border_colour : transparent_colour;
+                                            border-color: current_recording == index && !recording_deleting_mode && !recording_renaming_mode && !(new_recording && index == recording_names.length - 1) ? recording_border_colour : transparent_colour;
                                             background: deleted_recording_index == index && recording_deleted ? transparent_colour : recording_deleting_mode ? delete_colour : recording_renaming_mode ? rename_colour : transparent_colour;
                                             
                                             animate background, border-color {
@@ -930,7 +918,7 @@ export component AppWindow inherits Window {
                         
                                             VerticalLayout {
                                                 padding: deleted_recording_index == index && recording_deleted ? 0px : recording_deleting_mode || current_recording == index || recording_renaming_mode ? 8px: 0px;
-                                                spacing: recording_renaming_mode || (deleted_recording_index == index && recording_deleted) || (new_recording && index == new_recording_index) ? 0px : 4px;
+                                                spacing: recording_renaming_mode || (deleted_recording_index == index && recording_deleted) || (new_recording && index == recording_names.length - 1) ? 0px : 4px;
                                                 alignment: start;
         
                                                 animate padding, spacing {
@@ -951,8 +939,8 @@ export component AppWindow inherits Window {
                                                 if !recording_renaming_mode:
                                                 HeadingSmall {
                                                     text: recording_names[index];
-                                                    font-size: recording_renaming_mode || (deleted_recording_index == index && recording_deleted) || (new_recording && index == new_recording_index) ? 1px : 12px;
-                                                    opacity: recording_renaming_mode || (deleted_recording_index == index && recording_deleted) || (new_recording && index == new_recording_index) ? 0% : 100%;
+                                                    font-size: recording_renaming_mode || (deleted_recording_index == index && recording_deleted) || (new_recording && index == recording_names.length - 1) ? 1px : 12px;
+                                                    opacity: recording_renaming_mode || (deleted_recording_index == index && recording_deleted) || (new_recording && index == recording_names.length - 1) ? 0% : 100%;
         
                                                     animate font-size, opacity {
                                                         duration: 0.2s;
@@ -963,8 +951,8 @@ export component AppWindow inherits Window {
                                                 NormalText {
                                                     text: input_recording || locked ? "\{dial_values_when_locked[index][0]}  \{dial_values_when_locked[index][1]}  \{dial_values_when_locked[index][2]}  \{dial_values_when_locked[index][3]}  \{dial_values_when_locked[index][4]}  \{dial_values_when_locked[index][5]}" : "\{recording[0]}  \{recording[1]}  \{recording[2]}  \{recording[3]}  \{recording[4]}  \{recording[5]}";
                                                     vertical-alignment: center;
-                                                    font-size: recording_renaming_mode || (deleted_recording_index == index && recording_deleted) || (new_recording && index == new_recording_index) ? 1px : 12px;
-                                                    opacity: recording_renaming_mode || (deleted_recording_index == index && recording_deleted) || (new_recording && index == new_recording_index) ? 0% : 100%;
+                                                    font-size: recording_renaming_mode || (deleted_recording_index == index && recording_deleted) || (new_recording && index == recording_names.length - 1) ? 1px : 12px;
+                                                    opacity: recording_renaming_mode || (deleted_recording_index == index && recording_deleted) || (new_recording && index == recording_names.length - 1) ? 0% : 100%;
                                                     color: locked || input_recording || input_playback ? generic_disabled : white;
         
                                                     animate font-size, opacity, color {
@@ -1163,6 +1151,20 @@ export component AppWindow inherits Window {
                                             preset_deleting_mode = false;
                                             recording_renaming_mode = false;
                                             recording_deleting_mode = false;
+                                        }
+                                    }
+
+                                    BasicButton {
+
+                                        StatusImageSmall {
+                                            source: @image-url("icons/refresh-cw.svg");
+                                        }
+
+                                        clicked => {
+                                            started = true;
+                                            save();
+                                            started = false;
+                                            gen_shuffle();
                                         }
                                     }
             

@@ -2,7 +2,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 // -------- Imports --------
-use std::{env, error::Error as STDError, ffi::OsString, fs::{self, remove_file, rename}, sync::{Arc, Mutex, RwLock}, thread::{self, Thread}, time::{Duration, Instant}};
+use std::{cmp::Ordering, env, error::Error as STDError, ffi::OsString, fs::{self, remove_file, rename}, sync::{Arc, Mutex, RwLock}, thread::{self, Thread}, time::{Duration, Instant}};
 use savefile::{load_file, save_file};
 use savefile_derive::Savefile;
 use slint::{Model, ModelRc, SharedString, ToSharedString, VecModel};
@@ -10,7 +10,6 @@ use qruhear::{RUHear, RUBuffers, rucallback};
 use hound::{WavWriter, SampleFormat, WavSpec};
 use kira::{effect::{eq_filter::{EqFilterBuilder, EqFilterKind}, panning_control::PanningControlBuilder}, sound::static_sound::StaticSoundData, track::{TrackBuilder}, AudioManager, AudioManagerSettings, DefaultBackend, Tween};
 use rand::random_range;
-use sort;
 
 slint::include_modules!();
 
@@ -62,6 +61,60 @@ impl Error {
     }
 }
 
+#[derive(PartialEq, Debug)]
+enum TextNum {
+    Text(String),
+    Number(i32),
+}
+
+impl TextNum {
+    fn split_text_and_numbers(input: String) -> Vec<TextNum> {
+        let mut text = String::new();
+        let mut number = String::new();
+        let mut list = vec![];
+
+        let mut adding_text = false;
+        let mut adding_number = false;
+
+        let mut index = 0;
+        for char in input.chars() {
+            match char.to_string().parse::<i32>() {
+                Ok(_) => {
+                    adding_number = true;
+                    number.push(char);
+                    if adding_text {
+                        adding_text = false;
+                        if text.len() > 0 {
+                            list.push(TextNum::Text(text.clone()));
+                            text.clear();
+                        }
+                    }
+                    if index == input.len() - 1 {
+                        list.push(TextNum::Number(number.parse().unwrap()));
+                    }
+                },
+                Err(_) => {
+                    adding_text = true;
+                    text.push(char);
+                    if adding_number {
+                        adding_number = false;
+                        if number.len() > 0 {
+                            list.push(TextNum::Number(number.parse().unwrap()));
+                            number.clear();
+                        }
+                    }
+                    if index == input.len() - 1 {
+                        list.push(TextNum::Text(text.clone()));
+                    }
+                }
+            }
+            index += 1;
+        }
+
+        list
+    }
+}
+
 // File stuff
 #[derive(PartialEq)]
 enum File {
@@ -69,7 +122,7 @@ enum File {
 }
 
 impl File {
-    fn search(path: &str, extension: &str) -> Result<File, Error> {
+    fn search(path: &str, extension: &str, ordered: bool) -> Result<File, Error> {
         let mut names = vec![];
         match fs::read_dir(path) {
             Ok(directories) => {
@@ -100,7 +153,71 @@ impl File {
                         },
                     }
                 }
-                sort::introsort(&mut names);
+
+                if ordered {
+                    names.sort_by(|string1, string2| {
+                        let compare1 = TextNum::split_text_and_numbers(string1.to_string().to_lowercase());
+                        let compare2 = TextNum::split_text_and_numbers(string2.to_string().to_lowercase());
+                        let mut bias1 = 0;
+                        let mut bias2 = 0;
+    
+                        for item in 0..if compare1.len() <= compare2.len() {
+                            compare1.len()
+                        } else {
+                            compare2.len()
+                        } {
+                            if let (TextNum::Text(_), TextNum::Number(_)) = (&compare1[item], &compare2[item]) {
+                                bias1 = i32::MAX;
+                                break;
+                            } else if let (TextNum::Number(_), TextNum::Text(_)) = (&compare1[item], &compare2[item]) {
+                                bias2 = i32::MAX;
+                                break;
+                            } else if let (TextNum::Text(first), TextNum::Text(second)) = (&compare1[item], &compare2[item]) {
+                                let first_chars: Vec<char> = first.chars().collect();
+                                let second_chars: Vec<char> = second.chars().collect();
+                                for char in 0..if first.len() <= second.len() {
+                                    if first.len() < second.len() {
+                                        bias1 += 1;
+                                    }
+                                    first.len()
+                                } else {
+                                    bias2 += 1;
+                                    second.len()
+                                } {
+                                    match first_chars[char].cmp(&second_chars[char]) {
+                                        Ordering::Greater => {
+                                            bias1 += 1;
+                                        },
+                                        Ordering::Equal => {
+                                        },
+                                        Ordering::Less =>  {
+                                            bias2 += 1;
+                                        },
+                                    }
+                                }
+                            } else if let (TextNum::Number(first), TextNum::Number(second)) = (&compare1[item], &compare2[item]) {
+                                match first.cmp(&second) {
+                                    Ordering::Greater => {
+                                        bias1 += 1;
+                                    },
+                                    Ordering::Equal => {
+                                    },
+                                    Ordering::Less => {
+                                        bias2 += 1;
+                                    }
+                                }
+                            }
+                        }
+                        
+                        if bias1 > bias2 {
+                            Ordering::Greater
+                        } else if bias1 < bias2 {
+                            Ordering::Less
+                        } else {
+                            Ordering::Equal
+                        }
+                    });
+                }
                 Ok(File::Names(names))
             },
             Err(_) => Err(Error::ReadError),
@@ -743,8 +860,7 @@ impl Settings {
             self.recordings = match Recording::rename(&self.recordings, ui.get_recording_names()) {
                 Ok(value) => value,
                 Err(error) => {
-                    ui.set_error_notification(error.1.get_text());
-                    ui.set_error_recieved(true);
+                    error.1.send(ui);
                     error.0
                 },
             };
@@ -759,7 +875,7 @@ impl Settings {
                     String::new()
                 },
             };
-            let file_names = match File::search(&path, "wav") {
+            let file_names = match File::search(&path, "wav", true) {
                 Ok(File::Names(value)) => value,
                 Err(error) => {
                     error.send(ui);
@@ -767,7 +883,7 @@ impl Settings {
                 }
             };
 
-            let mut snapshot_names = match File::search(&path, "bin") {
+            let mut snapshot_names = match File::search(&path, "bin", true) {
                 Ok(File::Names(value)) => value,
                 Err(error) => {
                     error.send(ui);
@@ -805,8 +921,7 @@ impl Settings {
                         if file_names[name] != snapshot_names[file] {
                             match SnapShot::create(&file_names[name]) {
                                 Some(error) => {
-                                    ui.set_error_notification(error.get_text());
-                                    ui.set_error_recieved(true);
+                                    error.send(ui);
                                 },
                                 None => (),
                             }
@@ -818,8 +933,7 @@ impl Settings {
                 } else {
                     match SnapShot::create(&file_names[name]) {
                         Some(error) => {
-                            ui.set_error_notification(error.get_text());
-                            ui.set_error_recieved(true);
+                            error.send(ui);
                         },
                         None => (),
                     }
@@ -882,7 +996,7 @@ impl Tracker {
                 },
             };
 
-            let taken_names = match File::search(&path, "wav") {
+            let taken_names = match File::search(&path, "wav", false) {
                 Ok(File::Names(value)) => value,
                 Err(_) => vec![String::from("Couldn't read files")],
             };
@@ -899,8 +1013,8 @@ impl Tracker {
             let mut new_name = String::new();
 
             if recording_amount > 0 {
+                let potential = format!("Recording {}", recording_amount + 1);
                 for item in 0..recording_amount {
-                    let potential = format!("Recording {}", recording_amount + 1);
                     if potential != taken_names[item] {
                         new_name = format!("{}.wav", potential);
                     } else {
@@ -1429,10 +1543,12 @@ fn main() -> Result<(), Box<dyn STDError>> {
 
             let settings = settings_ref_count.read().unwrap();
 
-            if settings.recordings.len() > 2 {
-                ui.set_shuffle_order(ModelRc::new(VecModel::from(Recording::shuffle(settings.recordings.len()))));
-            } else {
-                Error::ShuffleError.send(&ui);
+            if ui.get_shuffle() {
+                if settings.recordings.len() > 2 {
+                    ui.set_shuffle_order(ModelRc::new(VecModel::from(Recording::shuffle(settings.recordings.len()))));
+                } else {
+                    Error::ShuffleError.send(&ui);
+                }
             }
         }
     });
