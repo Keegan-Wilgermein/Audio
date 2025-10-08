@@ -208,7 +208,7 @@ impl File {
                                 }
                             }
                         }
-                        
+
                         if bias1 > bias2 {
                             Ordering::Greater
                         } else if bias1 < bias2 {
@@ -867,81 +867,79 @@ impl Settings {
         }
 
         // Sync recording data with any changes that might have been made to the application files
-        if ui.get_started() || ui.get_new_recording() {
-            let path = match File::get_directory() {
-                Ok(value) => value,
-                Err(error) => {
-                    error.send(ui);
-                    String::new()
-                },
-            };
-            let file_names = match File::search(&path, "wav", true) {
-                Ok(File::Names(value)) => value,
-                Err(error) => {
-                    error.send(ui);
-                    vec![String::from("Couldn't read files")]
-                }
-            };
-
-            let mut snapshot_names = match File::search(&path, "bin", true) {
-                Ok(File::Names(value)) => value,
-                Err(error) => {
-                    error.send(ui);
-                    vec![String::from("Couldn't read files")]
-                }
-            };
-
-            for name in 0..snapshot_names.len() {
-                if snapshot_names[name] == "settings" {
-                    snapshot_names.remove(name);
-                    break;
-                }
+        let path = match File::get_directory() {
+            Ok(value) => value,
+            Err(error) => {
+                error.send(ui);
+                String::new()
+            },
+        };
+        let file_names = match File::search(&path, "wav", true) {
+            Ok(File::Names(value)) => value,
+            Err(error) => {
+                error.send(ui);
+                vec![String::from("Couldn't read files")]
             }
+        };
 
-            let mut updated_recordings = vec![];
-
-            for name in 0..file_names.len() {
-                if self.recordings.len() > 0 {
-                    for recording in 0..self.recordings.len() {
-                        if self.recordings[recording].name == file_names[name] {
-                            updated_recordings.push(Recording::from(&file_names[name], Recording::parse(&self.recordings[recording])));
-                            break;
-                        }
-                        if recording == self.recordings.len() - 1 {
-                            updated_recordings.push(Recording::new(&file_names[name]));
-                        }
-                    }
-                } else {
-                    updated_recordings.push(Recording::new(&file_names[name]));
-                }
-
-                // Syncs snapshots
-                if snapshot_names.len() > 0 {
-                    for file in 0..snapshot_names.len() {
-                        if file_names[name] != snapshot_names[file] {
-                            match SnapShot::create(&file_names[name]) {
-                                Some(error) => {
-                                    error.send(ui);
-                                },
-                                None => (),
-                            }
-                        } else {
-                            snapshot_names.remove(file);
-                            break;
-                        }
-                    }
-                } else {
-                    match SnapShot::create(&file_names[name]) {
-                        Some(error) => {
-                            error.send(ui);
-                        },
-                        None => (),
-                    }
-                }
+        let mut snapshot_names = match File::search(&path, "bin", true) {
+            Ok(File::Names(value)) => value,
+            Err(error) => {
+                error.send(ui);
+                vec![String::from("Couldn't read files")]
             }
-            
-            self.recordings = updated_recordings;
+        };
+
+        for name in 0..snapshot_names.len() {
+            if snapshot_names[name] == "settings" {
+                snapshot_names.remove(name);
+                break;
+            }
         }
+
+        let mut updated_recordings = vec![];
+
+        for name in 0..file_names.len() {
+            if self.recordings.len() > 0 {
+                for recording in 0..self.recordings.len() {
+                    if self.recordings[recording].name == file_names[name] {
+                        updated_recordings.push(Recording::from(&file_names[name], Recording::parse(&self.recordings[recording])));
+                        break;
+                    }
+                    if recording == self.recordings.len() - 1 {
+                        updated_recordings.push(Recording::new(&file_names[name]));
+                    }
+                }
+            } else {
+                updated_recordings.push(Recording::new(&file_names[name]));
+            }
+
+            // Syncs snapshots
+            if snapshot_names.len() > 0 {
+                for file in 0..snapshot_names.len() {
+                    if file_names[name] != snapshot_names[file] {
+                        match SnapShot::create(&file_names[name]) {
+                            Some(error) => {
+                                error.send(ui);
+                            },
+                            None => (),
+                        }
+                    } else {
+                        snapshot_names.remove(file);
+                        break;
+                    }
+                }
+            } else {
+                match SnapShot::create(&file_names[name]) {
+                    Some(error) => {
+                        error.send(ui);
+                    },
+                    None => (),
+                }
+            }
+        }
+        
+        self.recordings = updated_recordings;
     }
 }
 
