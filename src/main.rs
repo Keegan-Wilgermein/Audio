@@ -1166,9 +1166,13 @@ fn main() -> Result<(), Box<dyn STDError>> {
                 }
 
                 'two: loop {
+                    let mut capturing = false;
                     match audio_receiver.recv() {
                         Ok(Message::File(_)) => break 'two,
                         Ok(Message::PlayAudio(mut playback)) => {
+                            if let Playback::Capture(_) = playback.0 {
+                                capturing = true;
+                            }
                             let mut audio_manager = match AudioManager::<DefaultBackend>::new(
                                 AudioManagerSettings::default(),
                             ) {
@@ -1229,7 +1233,6 @@ fn main() -> Result<(), Box<dyn STDError>> {
                             let mut frame: usize = 0;
                             let mut previous_frame = [0, 0, 0, 0, 0, 0];
                             let mut edited_frame: usize = 0;
-                            let mut capturing = false;
                             let mut snapshot = if let Playback::Capture(ref data) = playback.0 {
                                 capturing = true;
                                 data.clone()
@@ -1355,9 +1358,6 @@ fn main() -> Result<(), Box<dyn STDError>> {
                                     let settings = player_settings_handle.read().unwrap();
 
                                     if let Playback::Capture(_) = playback.0 {
-                                        if !capturing {
-                                            capturing = true;
-                                        }
                                         if SnapShot::edited(
                                             previous_frame,
                                             Recording::parse(&settings.recordings[playback.1]),

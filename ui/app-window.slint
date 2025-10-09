@@ -1207,7 +1207,7 @@ export component AppWindow inherits Window {
                             }
             
                             play_inputs := ShadowedButton {
-                                enabled: !recording && recording_names.length > 0;
+                                enabled: !recording && recording_names.length > 0 && !input_recording;
                                 min-width: 100px;
             
                                 HorizontalLayout {
