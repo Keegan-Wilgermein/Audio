@@ -571,8 +571,8 @@ export component AppWindow inherits Window {
                                         }
                                     }
         
-                                    BasicButton {
-                                        enabled: locked;
+                                    restore := BasicButton {
+                                        enabled: (!preset_renaming_mode && !preset_deleting_mode && !input_playback && can_delete && locked) || input_recording;
         
                                         Rectangle {
                                             border-radius: 8px;
@@ -602,8 +602,9 @@ export component AppWindow inherits Window {
                                                     vertical-alignment: center;
                                                     font-size: !locked ? 1px : 12px;
                                                     opacity: !locked ? 0% : 100%;
+                                                    color: restore.enabled ? white : generic_disabled;
         
-                                                    animate font-size, opacity {
+                                                    animate font-size, opacity, color {
                                                         duration: 0.2s;
                                                         easing: ease-in-out-circ;
                                                     }
@@ -994,7 +995,9 @@ export component AppWindow inherits Window {
                                                 shuffle = true;
                                                 current_shuffle_index = 0;
                                                 gen_shuffle();
-                                                current_recording = shuffle_order[0];
+                                                if !audio_or_input_playback && !input_recording {
+                                                    current_recording = shuffle_order[0];
+                                                }
                                             }
                                         }
                                     }
@@ -1097,7 +1100,6 @@ export component AppWindow inherits Window {
                                             save();
                                             started = false;
                                             gen_shuffle();
-                                            current_recording = shuffle_order[0];
                                         }
                                     }
             
