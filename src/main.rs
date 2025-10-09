@@ -1492,7 +1492,6 @@ fn main() -> Result<(), Box<dyn STDError>> {
                 Ok(_) => {
                     if !ui.get_recording() {
                         ui.invoke_save();
-                        ui.set_current_dial_values(ModelRc::new(VecModel::from(Recording::parse_vec_from_list([0, 0, 0, 0, 0, 0]))));
                         ui.invoke_gen_shuffle();
                     }
                 },
@@ -1819,7 +1818,7 @@ fn main() -> Result<(), Box<dyn STDError>> {
 
             let occured = Tracker::read(error_handle.clone());
             match occured {
-                Some(mut error) => {
+                Some(error) => {
                     match error {
                         Error::MessageError => {
                             if ui.get_audio_or_input_playback() || ui.get_input_recording() {

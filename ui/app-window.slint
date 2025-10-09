@@ -364,14 +364,17 @@ export component AppWindow inherits Window {
             } else if preset_deleted {
                 save();
             }
-            recording_deleted = false;
-            preset_deleted = false;
             if recording_names.length > 0 {
                 current_dial_values = recording_values[current_recording];
             } else {
                 current_dial_values = [0, 0, 0, 0, 0, 0];
             }
-            gen_shuffle();
+            if recording_deleted {
+                gen_shuffle();
+            }
+            recording_deleted = false;
+            preset_deleted = false;
+            current_recording = shuffle_order[0];
         }
     }
 
@@ -991,6 +994,7 @@ export component AppWindow inherits Window {
                                                 shuffle = true;
                                                 current_shuffle_index = 0;
                                                 gen_shuffle();
+                                                current_recording = shuffle_order[0];
                                             }
                                         }
                                     }
@@ -1093,6 +1097,7 @@ export component AppWindow inherits Window {
                                             save();
                                             started = false;
                                             gen_shuffle();
+                                            current_recording = shuffle_order[0];
                                         }
                                     }
             
