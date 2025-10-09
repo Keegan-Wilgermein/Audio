@@ -1542,12 +1542,12 @@ fn main() -> Result<(), Box<dyn STDError>> {
             };
 
             let path = match File::get_directory() {
-                    Ok(value) => value,
-                    Err(error) => {
-                        error.send(&ui);
-                        String::new()
-                    },
-                };
+                Ok(value) => value,
+                Err(error) => {
+                    error.send(&ui);
+                    String::new()
+                },
+            };
 
             let settings = settings_handle.read().unwrap();
 
@@ -1810,17 +1810,46 @@ fn main() -> Result<(), Box<dyn STDError>> {
 
         let error_handle = errors.clone();
 
+        let sender = audio_sender.clone();
+
+        let settings_handle = tracker.settings.clone();
+
         move || {
             let ui = ui_handle.unwrap();
 
             let occured = Tracker::read(error_handle.clone());
             match occured {
-                Some(value) => {
-                    // ui.set_recording(false);
+                Some(mut error) => {
+                    match error {
+                        Error::MessageError => {
+                            if ui.get_audio_or_input_playback() || ui.get_input_recording() {
+                                let settings = settings_handle.read().unwrap();
+                                let file = if settings.recordings.len() > 0 {
+                                    settings.recordings[ui.get_current_recording() as usize].name.clone()
+                                } else {
+                                    String::new()
+                                };
+
+                                let path = match File::get_directory() {
+                                    Ok(value) => value,
+                                    Err(error) => {
+                                        error.send(&ui);
+                                        String::new()
+                                    },
+                                };
+                                match sender.send(Message::File(format!("{}/{}.wav", path, file))) {
+                                    Ok(_) => (),
+                                    Err(_) => (),
+                                }
+                            }
+                        }
+                        _ => (),
+                    }
+                    ui.set_recording(false);
                     ui.set_audio_playback(false);
                     ui.set_input_playback(false);
                     ui.set_input_recording(false);
-                    value.send(&ui);
+                    error.send(&ui);
                     Tracker::write(error_handle.clone(), None);
                 },
                 None => ()
