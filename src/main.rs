@@ -280,6 +280,7 @@ impl File {
     }
 
     fn truncate(name: &mut String, stop_char: &str, pass: u32) -> String {
+        let copy = name.clone();
         let mut length = name.len() - 1;
         let mut found = 0;
         loop {
@@ -292,8 +293,7 @@ impl File {
                 found += 1;
             } else {
                 if length == 1 {
-                    *name = String::from("Invalid file extension");
-                    break;
+                    return copy
                 }
                 name.remove(length);
                 length -= 1;
@@ -855,6 +855,7 @@ struct Tracker {
     snapshot_frame_values: Arc<RwLock<[i32; 6]>>,
     empty_recording: Arc<RwLock<bool>>,
     recording_check: Arc<RwLock<bool>>,
+    preloaded: Arc<RwLock<bool>>,
 }
 
 impl Tracker {
@@ -866,6 +867,7 @@ impl Tracker {
             snapshot_frame_values: Arc::new(RwLock::new([0, 0, 0, 0, 0, 0])),
             empty_recording: Arc::new(RwLock::new(true)),
             recording_check: Arc::new(RwLock::new(false)),
+            preloaded: Arc::new(RwLock::new(false)),
         }
     }
 
@@ -895,13 +897,17 @@ fn save(data: DataType, file: &str) -> Option<Error> {
                 return Some(Error::SaveError);
             }
         },
-        DataType::SnapShot(value) => match save_file(format!("{}.bin", file), 0, &value) {
+        DataType::SnapShot(value) => match save_file(format!("{}/{}.bin", path, file), 0, &value) {
             Ok(_) => {
                 return None;
             }
-            Err(error) => {
-                println!("{}", error);
-                return Some(Error::SaveError);
+            Err(_) => {
+                match save_file(format!("{}.bin", file), 0, &value) {
+                    Ok(_) => None,
+                    Err(_) => {
+                        Some(Error::SaveError)
+                    }
+                }
             }
         },
     }
@@ -1127,6 +1133,7 @@ fn main() -> Result<(), Box<dyn STDError>> {
     let player_settings_handle = tracker.settings.clone();
     let player_frame_handle = tracker.snapshot_frame_values.clone();
     let player_finished = tracker.playing.clone();
+    let loaded = tracker.preloaded.clone();
     match thread::Builder::new()
         .name(String::from("Player"))
         .spawn(move || {
@@ -1143,6 +1150,7 @@ fn main() -> Result<(), Box<dyn STDError>> {
                         sound_data = match StaticSoundData::from_file(&file) {
                             Ok(value) => {
                                 length = value.duration();
+                                Tracker::write(loaded.clone(), true);
                                 value
                             }
                             Err(_) => {
@@ -1439,7 +1447,8 @@ fn main() -> Result<(), Box<dyn STDError>> {
                                     None => (),
                                 };
                             }
-                        }
+                        },
+                        Ok(Message::StopAudio) => continue 'two,
                         _ => {
                             Tracker::write(player_error_handle.clone(), Some(Error::MessageError));
                             continue 'two;
@@ -1664,10 +1673,14 @@ fn main() -> Result<(), Box<dyn STDError>> {
 
         let settings_handle = tracker.settings.clone();
 
+        let preloaded_handle = tracker.preloaded.clone();
+
         move || {
             let ui = ui_handle.unwrap();
 
             let settings = settings_handle.read().unwrap();
+
+            Tracker::write(preloaded_handle.clone(), false);
 
             let file = if settings.recordings.len() > 0 {
                 settings.recordings[ui.get_current_recording() as usize]
@@ -1685,8 +1698,6 @@ fn main() -> Result<(), Box<dyn STDError>> {
                 }
             };
 
-            let settings = settings_handle.read().unwrap();
-
             let snapshot_data = if settings.recordings.len() > 0 {
                 match load(
                     &settings.recordings[ui.get_current_recording() as usize].name,
@@ -1703,7 +1714,12 @@ fn main() -> Result<(), Box<dyn STDError>> {
             };
 
             if settings.recordings.len() > 0 {
-                for _ in 0..if ui.get_starting_threads() { 1 } else { 2 } {
+                for _ in 0..if ui.get_starting_threads() {
+                    ui.set_starting_threads(false);
+                    1
+                } else {
+                    2
+                } {
                     match sender_handle.send(Message::File(format!("{}/{}.wav", path, file))) {
                         Ok(_) => (),
                         Err(_) => {
@@ -1763,6 +1779,8 @@ fn main() -> Result<(), Box<dyn STDError>> {
 
         let settings_handle = tracker.settings.clone();
 
+        let preloaded_handle = tracker.preloaded.clone();
+
         move || {
             let ui = ui_handle.unwrap();
 
@@ -1779,23 +1797,50 @@ fn main() -> Result<(), Box<dyn STDError>> {
                 }
             };
 
-            match sender_handle.send(if ui.get_audio_playback() {
-                ui.set_audio_playback(false);
-                ui.set_input_playback(false);
-                ui.set_input_recording(false);
-                Message::StopAudio
+            if Tracker::read(preloaded_handle.clone()) {
+                ()
             } else {
-                ui.set_audio_playback(true);
-                ui.set_input_playback(false);
-                ui.set_input_recording(false);
-                ui.set_current_dial_values(ModelRc::new(VecModel::from(
+                let file = if settings.recordings.len() > 0 {
                     settings.recordings[ui.get_current_recording() as usize]
-                        .parse_vec_from_recording(),
-                )));
-                Message::PlayAudio((
-                    Playback::Generic(snapshot_data),
-                    ui.get_current_recording() as usize,
-                ))
+                        .name
+                        .clone()
+                } else {
+                    String::new()
+                };
+
+                let path = match File::get_directory() {
+                    Ok(value) => value,
+                    Err(error) => {
+                        error.send(&ui);
+                        String::new()
+                    }
+                };
+
+                match sender_handle.send(Message::File(format!("{}/{}.wav", path, file))) {
+                    Ok(_) => (),
+                    Err(_) => {
+                        Tracker::write(error_handle.clone(), Some(Error::PlaybackError));
+                    }
+                }
+            }
+
+            match sender_handle.send(if ui.get_audio_playback() {
+                    ui.set_audio_playback(false);
+                    ui.set_input_playback(false);
+                    ui.set_input_recording(false);
+                    Message::StopAudio
+                } else {
+                    ui.set_audio_playback(true);
+                    ui.set_input_playback(false);
+                    ui.set_input_recording(false);
+                    ui.set_current_dial_values(ModelRc::new(VecModel::from(
+                        settings.recordings[ui.get_current_recording() as usize]
+                            .parse_vec_from_recording(),
+                    )));
+                    Message::PlayAudio((
+                        Playback::Generic(snapshot_data),
+                        ui.get_current_recording() as usize,
+                    ))
             }) {
                 Ok(_) => (),
                 Err(_) => {
@@ -1815,6 +1860,8 @@ fn main() -> Result<(), Box<dyn STDError>> {
         let error_handle = errors.clone();
 
         let sender_handle = audio_sender.clone();
+
+        let preloaded_handle = tracker.preloaded.clone();
 
         move || {
             let ui = ui_handle.unwrap();
@@ -1836,6 +1883,33 @@ fn main() -> Result<(), Box<dyn STDError>> {
                 let mut dial_values = dials.write().unwrap();
                 *dial_values =
                     Recording::parse(&settings.recordings[ui.get_current_recording() as usize]);
+            }
+
+            if Tracker::read(preloaded_handle.clone()) {
+                ()
+            } else {
+                let file = if settings.recordings.len() > 0 {
+                    settings.recordings[ui.get_current_recording() as usize]
+                        .name
+                        .clone()
+                } else {
+                    String::new()
+                };
+
+                let path = match File::get_directory() {
+                    Ok(value) => value,
+                    Err(error) => {
+                        error.send(&ui);
+                        String::new()
+                    }
+                };
+
+                match sender_handle.send(Message::File(format!("{}/{}.wav", path, file))) {
+                    Ok(_) => (),
+                    Err(_) => {
+                        Tracker::write(error_handle.clone(), Some(Error::PlaybackError));
+                    }
+                }
             }
 
             match sender_handle.send(if ui.get_input_playback() {
@@ -1873,16 +1947,46 @@ fn main() -> Result<(), Box<dyn STDError>> {
 
         let settings_handle = tracker.settings.clone();
 
+        let preloaded_handle = tracker.preloaded.clone();
+
         move || {
             let ui = ui_handle.unwrap();
 
             let snapshot_data = SnapShot::new();
 
+            let settings = settings_handle.read().unwrap();
+
+            if Tracker::read(preloaded_handle.clone()) {
+                ()
+            } else {
+                let file = if settings.recordings.len() > 0 {
+                    settings.recordings[ui.get_current_recording() as usize]
+                        .name
+                        .clone()
+                } else {
+                    String::new()
+                };
+
+                let path = match File::get_directory() {
+                    Ok(value) => value,
+                    Err(error) => {
+                        error.send(&ui);
+                        String::new()
+                    }
+                };
+
+                match sender_handle.send(Message::File(format!("{}/{}.wav", path, file))) {
+                    Ok(_) => (),
+                    Err(_) => {
+                        Tracker::write(error_handle.clone(), Some(Error::PlaybackError));
+                    }
+                }
+            }
+
             match sender_handle.send(if ui.get_input_playback() {
                 ui.set_input_recording(false);
                 ui.set_audio_playback(false);
                 ui.set_input_playback(false);
-                let settings = settings_handle.read().unwrap();
                 ui.set_current_dial_values(ModelRc::new(VecModel::from(
                     settings.recordings[ui.get_current_recording() as usize]
                         .parse_vec_from_recording(),
@@ -1936,7 +2040,7 @@ fn main() -> Result<(), Box<dyn STDError>> {
                     ui.set_input_recording(false);
                     ui.set_audio_playback(false);
                     ui.set_input_playback(false);
-                } else if ui.get_playback() == PlaybackType::Loop {
+                } else if ui.get_playback() == PlaybackType::Loop || ui.get_playback() == PlaybackType::AutoNext {
                     match sender_handle.send(if ui.get_input_recording() {
                         ui.set_input_recording(false);
                         ui.set_audio_playback(false);
