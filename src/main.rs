@@ -293,7 +293,7 @@ impl File {
                 found += 1;
             } else {
                 if length == 1 {
-                    return copy
+                    return copy;
                 }
                 name.remove(length);
                 length -= 1;
@@ -901,14 +901,10 @@ fn save(data: DataType, file: &str) -> Option<Error> {
             Ok(_) => {
                 return None;
             }
-            Err(_) => {
-                match save_file(format!("{}.bin", file), 0, &value) {
-                    Ok(_) => None,
-                    Err(_) => {
-                        Some(Error::SaveError)
-                    }
-                }
-            }
+            Err(_) => match save_file(format!("{}.bin", file), 0, &value) {
+                Ok(_) => None,
+                Err(_) => Some(Error::SaveError),
+            },
         },
     }
 }
@@ -1447,7 +1443,7 @@ fn main() -> Result<(), Box<dyn STDError>> {
                                     None => (),
                                 };
                             }
-                        },
+                        }
                         Ok(Message::StopAudio) => continue 'two,
                         _ => {
                             Tracker::write(player_error_handle.clone(), Some(Error::MessageError));
@@ -1825,22 +1821,26 @@ fn main() -> Result<(), Box<dyn STDError>> {
             }
 
             match sender_handle.send(if ui.get_audio_playback() {
-                    ui.set_audio_playback(false);
-                    ui.set_input_playback(false);
-                    ui.set_input_recording(false);
-                    Message::StopAudio
-                } else {
-                    ui.set_audio_playback(true);
-                    ui.set_input_playback(false);
-                    ui.set_input_recording(false);
-                    ui.set_current_dial_values(ModelRc::new(VecModel::from(
-                        settings.recordings[ui.get_current_recording() as usize]
-                            .parse_vec_from_recording(),
-                    )));
-                    Message::PlayAudio((
-                        Playback::Generic(snapshot_data),
-                        ui.get_current_recording() as usize,
-                    ))
+                ui.set_audio_playback(false);
+                ui.set_input_playback(false);
+                ui.set_input_recording(false);
+                ui.set_current_dial_values(ModelRc::new(VecModel::from(
+                    settings.recordings[ui.get_current_recording() as usize]
+                        .parse_vec_from_recording(),
+                )));
+                Message::StopAudio
+            } else {
+                ui.set_audio_playback(true);
+                ui.set_input_playback(false);
+                ui.set_input_recording(false);
+                ui.set_current_dial_values(ModelRc::new(VecModel::from(
+                    settings.recordings[ui.get_current_recording() as usize]
+                        .parse_vec_from_recording(),
+                )));
+                Message::PlayAudio((
+                    Playback::Generic(snapshot_data),
+                    ui.get_current_recording() as usize,
+                ))
             }) {
                 Ok(_) => (),
                 Err(_) => {
@@ -1991,6 +1991,7 @@ fn main() -> Result<(), Box<dyn STDError>> {
                     settings.recordings[ui.get_current_recording() as usize]
                         .parse_vec_from_recording(),
                 )));
+                ui.set_locked(false);
                 Message::StopAudio
             } else {
                 ui.set_input_recording(true);
@@ -2040,11 +2041,18 @@ fn main() -> Result<(), Box<dyn STDError>> {
                     ui.set_input_recording(false);
                     ui.set_audio_playback(false);
                     ui.set_input_playback(false);
-                } else if ui.get_playback() == PlaybackType::Loop || ui.get_playback() == PlaybackType::AutoNext {
+                } else if ui.get_playback() == PlaybackType::Loop
+                    || ui.get_playback() == PlaybackType::AutoNext
+                {
                     match sender_handle.send(if ui.get_input_recording() {
+                        ui.set_current_dial_values(ModelRc::new(VecModel::from(
+                            settings.recordings[ui.get_current_recording() as usize]
+                                .parse_vec_from_recording(),
+                        )));
                         ui.set_input_recording(false);
                         ui.set_audio_playback(false);
                         ui.set_input_playback(false);
+                        ui.set_locked(false);
                         Message::StopAudio
                     } else {
                         Message::PlayAudio((
