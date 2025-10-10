@@ -23,6 +23,5 @@ identifier = "com.keegan.audio"
 icon = ["ui/icons/audio_icon.png"]
 version = "1.0.0"
 copyright = "Copyright (c) Keegan Wilgermein 2025. All rights reserved."
-category = "Audio"
 short_description = "An audio recorder, player, and eq."
 osx_url_schemes = ["com.keegan.audio"]
