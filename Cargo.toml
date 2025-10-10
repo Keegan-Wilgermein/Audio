@@ -20,7 +20,7 @@ slint-build = "1.12.1"
 [package.metadata.bundle]
 name = "Audio"
 identifier = "com.keegan.audio"
-icon = ["ui/icons/audio_icon.png"]
+icon = ["audio_icon/audio_icon-macOS-Default-1024x1024@1x.icns"]
 version = "1.0.0"
 copyright = "Copyright (c) Keegan Wilgermein 2025. All rights reserved."
 short_description = "An audio recorder, player, and eq."
