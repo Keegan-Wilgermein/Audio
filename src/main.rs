@@ -3,21 +3,26 @@
 
 // -------- Imports --------
 use hound::{SampleFormat, WavSpec, WavWriter}; // Imports for writing recorded data to disk
-use kira::{ // Imports for playing back recordings and editing them
+use kira::{
+    // Imports for playing back recordings and editing them
     effect::{
         eq_filter::{EqFilterBuilder, EqFilterKind},
         panning_control::PanningControlBuilder,
     },
     sound::static_sound::StaticSoundData,
     track::TrackBuilder,
-    AudioManager, AudioManagerSettings, DefaultBackend, Tween,
+    AudioManager,
+    AudioManagerSettings,
+    DefaultBackend,
+    Tween,
 };
 use qruhear::{rucallback, RUBuffers, RUHear}; // Imports for recording audio
 use rand::random_range; // Random numbers
 use savefile::{load_file, save_file}; // Saving settings and snapshot data
 use savefile_derive::Savefile;
 use slint::{Model, ModelRc, SharedString, ToSharedString, VecModel}; // Imports for UI
-use std::{ // Threads, file reading, current time, and reference variables
+use std::{
+    // Threads, file reading, current time, and reference variables
     cmp::Ordering,
     env,
     error::Error as STDError,
@@ -33,29 +38,31 @@ slint::include_modules!(); // Imports the auto generated functions used to contr
 // -------- Enums --------
 // Errors
 #[derive(Clone, Copy, PartialEq)] // Derives attributes like .clone() and ==
-enum Error { // Keeps track of errors
-    SaveError, // Error while saving any data
-    LoadError, // Error while loading any data
-    RecordError, // Error while recording audio
-    WriteError, // Error while saving audio data
-    ReadError, // Error while reading data on disk
-    RenameError, // Error while renaming file
-    DeleteError, // Error while deleting file
-    FallbackError, // Attempt to rename recording to 'Default taken...'
-    EmptyError, // Attempt to rename recording to ''
-    ExistsError, // Attempt to rename recording to an already existing name
+enum Error {
+    // Keeps track of errors
+    SaveError,           // Error while saving any data
+    LoadError,           // Error while loading any data
+    RecordError,         // Error while recording audio
+    WriteError,          // Error while saving audio data
+    ReadError,           // Error while reading data on disk
+    RenameError,         // Error while renaming file
+    DeleteError,         // Error while deleting file
+    FallbackError,       // Attempt to rename recording to 'Default taken...'
+    EmptyError,          // Attempt to rename recording to ''
+    ExistsError,         // Attempt to rename recording to an already existing name
     SaveFileRenameError, // Attempt to rename recording to 'settings'
-    PlaybackError, // Error playing audio
-    ShuffleError, // Not enough recordings to shuffle
-    DirectoryError, // Returned directory not the working directory
+    PlaybackError,       // Error playing audio
+    ShuffleError,        // Not enough recordings to shuffle
+    DirectoryError,      // Returned directory not the working directory
     RecorderThreadError, // Recorder thread failed to start
-    PlayerThreadError, // Player thread failed to start
-    MessageError, // Unexpected message sent to thread
+    PlayerThreadError,   // Player thread failed to start
+    MessageError,        // Unexpected message sent to thread
     EmptyRecordingError, // Specifically when a recording is made that contains no sound and couldn't be automatically deleted
 }
 
 impl Error {
-    fn get_text(self) -> SharedString { // Takes an error value and returns a shared string to send to the ui
+    fn get_text(self) -> SharedString {
+        // Takes an error value and returns a shared string to send to the ui
         match self {
             Error::SaveError => SharedString::from("Failed to save data"),
             Error::LoadError => SharedString::from("Data doesn't exist"),
@@ -86,7 +93,8 @@ impl Error {
         }
     }
 
-    fn send(self, ui: &AppWindow) { // Takes an error value and updates the ui
+    fn send(self, ui: &AppWindow) {
+        // Takes an error value and updates the ui
         ui.set_error_notification(self.get_text());
         ui.set_error_recieved(true);
     }
@@ -100,7 +108,8 @@ enum TextNum {
 }
 
 impl TextNum {
-    fn split_text_and_numbers(input: String) -> Vec<TextNum> { // Takes a string and returns a vector of itself
+    fn split_text_and_numbers(input: String) -> Vec<TextNum> {
+        // Takes a string and returns a vector of itself
         let mut text = String::new();
         let mut number = String::new();
         let mut list = vec![];
@@ -109,9 +118,12 @@ impl TextNum {
         let mut adding_number = false; // Keeps track of whether the last character was a number
 
         let mut index = 0;
-        for char in input.chars() { // Loops over every character in the input string
-            match char.to_string().parse::<i32>() { // Attempts to parse the char into an i32
-                Ok(_) => { // If parse is successful
+        for char in input.chars() {
+            // Loops over every character in the input string
+            match char.to_string().parse::<i32>() {
+                // Attempts to parse the char into an i32
+                Ok(_) => {
+                    // If parse is successful
                     adding_number = true;
                     number.push(char); // Adds char to the numbers list
                     if adding_text {
@@ -121,11 +133,13 @@ impl TextNum {
                             text.clear(); // Clears the text string for another use
                         }
                     }
-                    if index == input.len() - 1 { // Checks to see if on the last char
+                    if index == input.len() - 1 {
+                        // Checks to see if on the last char
                         list.push(TextNum::Number(number.parse().unwrap())); // Pushes the number string onto the final list after parsing it into an i32
                     }
                 }
-                Err(_) => { // If parse fails
+                Err(_) => {
+                    // If parse fails
                     // Do the same thing as if it was successful but with the opposite strings
                     adding_text = true;
                     text.push(char);
@@ -158,7 +172,7 @@ enum Playback {
 
 // Mpsc messages
 enum Message {
-    File(String), // Path
+    File(String),                 // Path
     PlayAudio((Playback, usize)), // Type, index of current recording
     StopAudio,
     StartRecording,
@@ -172,23 +186,31 @@ enum File {
 }
 
 impl File {
-    fn search(path: &str, extension: &str, ordered: bool) -> Result<File, Error> { // Searches for files at the specified path and the same extension, and returns either a list of names or an error
+    fn search(path: &str, extension: &str, ordered: bool) -> Result<File, Error> {
+        // Searches for files at the specified path and the same extension, and returns either a list of names or an error
         let mut names = vec![];
-        match fs::read_dir(path) { // Attemps to read the files at the specified path
+        match fs::read_dir(path) {
+            // Attemps to read the files at the specified path
             Ok(directories) => {
-                for entry in directories { // Loop throuh every entry
+                for entry in directories {
+                    // Loop throuh every entry
                     match entry {
                         Ok(directory) => {
                             let path = directory.path(); // Get the path of each entry
 
-                            if path.is_file() { // If it's a file not a folder
-                                if let Some(file_type) = path.extension() { // Gets the extension of the file
-                                    if file_type == extension { // Checks if it's correct
-                                        let file_name = match path.file_name() { // Gets the file name
+                            if path.is_file() {
+                                // If it's a file not a folder
+                                if let Some(file_type) = path.extension() {
+                                    // Gets the extension of the file
+                                    if file_type == extension {
+                                        // Checks if it's correct
+                                        let file_name = match path.file_name() {
+                                            // Gets the file name
                                             Some(value) => value.to_owned(),
                                             None => OsString::from("Couldn't read name"),
                                         };
-                                        names.push(match file_name.into_string() { // Pushes the file name onto the list of names
+                                        names.push(match file_name.into_string() {
+                                            // Pushes the file name onto the list of names
                                             Ok(mut value) => File::truncate(&mut value, ".", 0), // Truncates the extension on the name
                                             Err(_) => String::from("Couldn't read name"),
                                         });
@@ -202,8 +224,10 @@ impl File {
                     }
                 }
 
-                if ordered { // If true passed as the ordering value
-                    names.sort_by(|string1, string2| { // Sorts the names list using a custom rule set
+                if ordered {
+                    // If true passed as the ordering value
+                    names.sort_by(|string1, string2| {
+                        // Sorts the names list using a custom rule set
                         let compare1 =
                             TextNum::split_text_and_numbers(string1.to_string().to_lowercase()); // Splits string into letters and whole numbers
                         let compare2 =
@@ -212,27 +236,32 @@ impl File {
                         let mut bias1 = 0;
                         let mut bias2 = 0;
 
-                        for item in 0..if compare1.len() <= compare2.len() { // Loops through all the items in the smallest list
+                        for item in 0..if compare1.len() <= compare2.len() {
+                            // Loops through all the items in the smallest list
                             compare1.len()
                         } else {
                             compare2.len()
                         } {
-                            if let (TextNum::Text(_), TextNum::Number(_)) = // Checks if the first list is text and the second is a number
+                            if let (TextNum::Text(_), TextNum::Number(_)) =
+                                // Checks if the first list is text and the second is a number
                                 (&compare1[item], &compare2[item])
                             {
                                 bias1 = i32::MAX; // Sets bias1 to the maximum value for an i32
                                 break; // Skips the rest of the checks as they no longer matter
-                            } else if let (TextNum::Number(_), TextNum::Text(_)) = // Does the opposite
+                            } else if let (TextNum::Number(_), TextNum::Text(_)) =
+                                // Does the opposite
                                 (&compare1[item], &compare2[item])
                             {
                                 bias2 = i32::MAX;
                                 break;
-                            } else if let (TextNum::Text(first), TextNum::Text(second)) = // Checks if they are both text
+                            } else if let (TextNum::Text(first), TextNum::Text(second)) =
+                                // Checks if they are both text
                                 (&compare1[item], &compare2[item])
                             {
                                 let first_chars: Vec<char> = first.chars().collect(); // Converts the current vector index into its own vector
                                 let second_chars: Vec<char> = second.chars().collect();
-                                for char in 0..if first.len() <= second.len() { // Iterates through the shorter vector
+                                for char in 0..if first.len() <= second.len() {
+                                    // Iterates through the shorter vector
                                     if first.len() < second.len() {
                                         bias2 += 1; // Prioritises the longer list appearing after the shorter one
                                     }
@@ -241,7 +270,8 @@ impl File {
                                     bias1 += 1;
                                     second.len()
                                 } {
-                                    match first_chars[char].cmp(&second_chars[char]) { // Compares the values in alphabetical order
+                                    match first_chars[char].cmp(&second_chars[char]) {
+                                        // Compares the values in alphabetical order
                                         Ordering::Greater => {
                                             bias1 += 1; // Prioritises the later characters in the alphabet appearing after the earlier ones
                                         }
@@ -251,10 +281,12 @@ impl File {
                                         }
                                     }
                                 }
-                            } else if let (TextNum::Number(first), TextNum::Number(second)) = // If both are numbers
+                            } else if let (TextNum::Number(first), TextNum::Number(second)) =
+                                // If both are numbers
                                 (&compare1[item], &compare2[item])
                             {
-                                match first.cmp(&second) { // Compare the numbers
+                                match first.cmp(&second) {
+                                    // Compare the numbers
                                     Ordering::Greater => {
                                         bias1 += 1; // Prioritise the greater number appearing last
                                     }
@@ -281,20 +313,24 @@ impl File {
         }
     }
 
-    fn truncate(name: &mut String, stop_char: &str, pass: u32) -> String { // Truncates strings to the designated stop character
+    fn truncate(name: &mut String, stop_char: &str, pass: u32) -> String {
+        // Truncates strings to the designated stop character
         let copy = name.clone();
         let mut length = name.len() - 1;
         let mut found = 0;
         loop {
-            if name.ends_with(stop_char) { // Checks if the last character is the same as the stop character
+            if name.ends_with(stop_char) {
+                // Checks if the last character is the same as the stop character
                 name.remove(length); // Remove it
                 length -= 1;
-                if found == pass { // Checks if it's passed enough stop characters
+                if found == pass {
+                    // Checks if it's passed enough stop characters
                     break;
                 }
                 found += 1;
             } else {
-                if length == 1 { // Returns the original input if no or not enough stop characters found
+                if length == 1 {
+                    // Returns the original input if no or not enough stop characters found
                     return copy;
                 }
                 name.remove(length);
@@ -305,12 +341,15 @@ impl File {
         name.to_string() // Returns the truncated string
     }
 
-    fn rename(old: &String, name: String) -> Option<Error> { // Renames the inputted file or returns an error
-        let path = match File::get_directory() { // Gets current path
+    fn rename(old: &String, name: String) -> Option<Error> {
+        // Renames the inputted file or returns an error
+        let path = match File::get_directory() {
+            // Gets current path
             Ok(value) => value,
             Err(error) => return Some(error),
         };
-        match rename( // Attempts to rename the file
+        match rename(
+            // Attempts to rename the file
             format!("{}/{}.wav", path, old),
             format!("{}/{}.wav", path, name),
         ) {
@@ -333,7 +372,8 @@ impl File {
         None // Return nothing if no error
     }
 
-    fn delete(name: String) -> Option<Error> { // Attempts to delete the inputted file or returns an error
+    fn delete(name: String) -> Option<Error> {
+        // Attempts to delete the inputted file or returns an error
         let path = match File::get_directory() {
             Ok(value) => value,
             Err(error) => return Some(error),
@@ -350,10 +390,13 @@ impl File {
         }
     }
 
-    fn exists(new: String, old_list: &Vec<Recording>) -> bool { // Checks if a name already exists in the current save
+    fn exists(new: String, old_list: &Vec<Recording>) -> bool {
+        // Checks if a name already exists in the current save
         let mut check = false;
-        for item in 0..old_list.len() { // Loops through the name sin a list
-            if new == old_list[item].name { // If it exists return true
+        for item in 0..old_list.len() {
+            // Loops through the name sin a list
+            if new == old_list[item].name {
+                // If it exists return true
                 check = true;
                 break;
             }
@@ -362,12 +405,15 @@ impl File {
         check
     }
 
-    fn get_directory() -> Result<String, Error> { // Gets the working directory
+    fn get_directory() -> Result<String, Error> {
+        // Gets the working directory
         let mut error = None;
         let mut string = String::new();
-        match env::current_exe() { // Gets the path that the executable is saved at
+        match env::current_exe() {
+            // Gets the path that the executable is saved at
             Ok(value) => {
-                let mut name = match value.into_os_string().into_string() { // Converts the value into something easier to work with
+                let mut name = match value.into_os_string().into_string() {
+                    // Converts the value into something easier to work with
                     Ok(value) => value,
                     Err(_) => {
                         error = Some(Error::DirectoryError); // Returns an error if unsuccessful
@@ -381,7 +427,8 @@ impl File {
             }
         };
 
-        match error { // If an error occured at some point in the process, return an error otherwise the file path
+        match error {
+            // If an error occured at some point in the process, return an error otherwise the file path
             Some(value) => Err(value),
             None => Ok(string),
         }
@@ -414,7 +461,8 @@ struct SnapShot {
 }
 
 impl SnapShot {
-    fn create(name: &str) -> Option<Error> { // Saves an empty snapshot to disk or returns an error
+    fn create(name: &str) -> Option<Error> {
+        // Saves an empty snapshot to disk or returns an error
         match SnapShot::new().save(name) {
             Some(error) => {
                 return Some(error);
@@ -425,13 +473,15 @@ impl SnapShot {
         None
     }
 
-    fn new() -> SnapShot { // New snapshot in memory
+    fn new() -> SnapShot {
+        // New snapshot in memory
         SnapShot {
             frames: vec![([0, 0, 0, 0, 0, 0], 0)],
         }
     }
 
-    fn edited(previous: [i32; 6], next: [i32; 6]) -> bool { // Checks if the dial values have changed
+    fn edited(previous: [i32; 6], next: [i32; 6]) -> bool {
+        // Checks if the dial values have changed
         for number in 0..6 {
             if previous[number] == next[number] {
                 continue;
@@ -443,7 +493,8 @@ impl SnapShot {
         false
     }
 
-    fn save(self, name: &str) -> Option<Error> { // Saves a snapshot to disk that doesn't have to be empty - Used when a snapshot already exists
+    fn save(self, name: &str) -> Option<Error> {
+        // Saves a snapshot to disk that doesn't have to be empty - Used when a snapshot already exists
         save(DataType::SnapShot(self), name)
     }
 }
@@ -461,7 +512,8 @@ struct Preset {
 }
 
 impl Preset {
-    fn from(values: [i32; 6]) -> Preset { // Creates a preset from dial values
+    fn from(values: [i32; 6]) -> Preset {
+        // Creates a preset from dial values
         Preset {
             name: String::from("New Preset"),
             sub_bass: values[0],
@@ -473,7 +525,8 @@ impl Preset {
         }
     }
 
-    fn send_names(list: &Vec<Preset>, length: &usize) -> ModelRc<SharedString> { // Sends preset names to UI
+    fn send_names(list: &Vec<Preset>, length: &usize) -> ModelRc<SharedString> {
+        // Sends preset names to UI
         let mut preset_names = vec![];
         for preset in 0..*length {
             preset_names.push(list[preset].name.to_shared_string());
@@ -483,7 +536,8 @@ impl Preset {
         ModelRc::new(VecModel::from(preset_names)) // Creates new ModelRc from the names list
     }
 
-    fn send_values(list: &Vec<Preset>, length: &usize) -> ModelRc<ModelRc<i32>> { // Sends preset dial values to the UI
+    fn send_values(list: &Vec<Preset>, length: &usize) -> ModelRc<ModelRc<i32>> {
+        // Sends preset dial values to the UI
         let mut all_preset_values = vec![];
         for values in 0..*length {
             let mut preset_values = vec![];
@@ -514,7 +568,8 @@ struct Recording {
 }
 
 impl Recording {
-    fn new(name: &String) -> Recording { // Creates a new recording
+    fn new(name: &String) -> Recording {
+        // Creates a new recording
         Recording {
             name: name.to_string(),
             sub_bass: 0,
@@ -526,7 +581,8 @@ impl Recording {
         }
     }
 
-    fn from(name: &String, values: [i32; 6]) -> Recording { // Creates a new recording from a name and dial values
+    fn from(name: &String, values: [i32; 6]) -> Recording {
+        // Creates a new recording from a name and dial values
         Recording {
             name: name.to_string(),
             sub_bass: values[0],
@@ -538,7 +594,8 @@ impl Recording {
         }
     }
 
-    fn parse(&self) -> [i32; 6] { // Parses recording data into dial values
+    fn parse(&self) -> [i32; 6] {
+        // Parses recording data into dial values
         let mut list: [i32; 6] = [0, 0, 0, 0, 0, 0];
 
         list[0] = self.sub_bass;
@@ -551,7 +608,8 @@ impl Recording {
         list
     }
 
-    fn parse_vec_from_recording(&self) -> Vec<i32> { // Parses recording data into a vector
+    fn parse_vec_from_recording(&self) -> Vec<i32> {
+        // Parses recording data into a vector
         let mut list = vec![];
 
         list.push(self.sub_bass);
@@ -564,7 +622,8 @@ impl Recording {
         list
     }
 
-    fn parse_vec_from_list(list: [i32; 6]) -> Vec<i32> { // Parses a vector from dial values
+    fn parse_vec_from_list(list: [i32; 6]) -> Vec<i32> {
+        // Parses a vector from dial values
         let mut new = vec![];
 
         new.push(list[0]);
@@ -577,7 +636,8 @@ impl Recording {
         new
     }
 
-    fn send_names(list: &Vec<Recording>) -> ModelRc<SharedString> { // Sends recording names to UI
+    fn send_names(list: &Vec<Recording>) -> ModelRc<SharedString> {
+        // Sends recording names to UI
         let mut new_list = vec![];
 
         for recording in 0..list.len() {
@@ -587,7 +647,8 @@ impl Recording {
         ModelRc::new(VecModel::from(new_list))
     }
 
-    fn send_values(list: &Vec<Recording>, length: &usize) -> ModelRc<ModelRc<i32>> { // Sends recording dial values to UI
+    fn send_values(list: &Vec<Recording>, length: &usize) -> ModelRc<ModelRc<i32>> {
+        // Sends recording dial values to UI
         let mut all_recording_values = vec![];
         for values in 0..*length {
             let mut recording_values = vec![];
@@ -604,10 +665,12 @@ impl Recording {
         ModelRc::new(VecModel::from(all_recording_values))
     }
 
-    fn rename( // Renames recordings
+    fn rename(
+        // Renames recordings
         old: &Vec<Recording>,
         new: ModelRc<SharedString>,
-    ) -> Result<Vec<Recording>, (Vec<Recording>, Error)> { // Returns either a vector of the new names or if there was an error, a vector of new and old names plus an error value
+    ) -> Result<Vec<Recording>, (Vec<Recording>, Error)> {
+        // Returns either a vector of the new names or if there was an error, a vector of new and old names plus an error value
         let mut recording_list = vec![];
 
         // Checks for different kinds of errors
@@ -617,32 +680,39 @@ impl Recording {
         let mut save_file_rename_error_occured = false;
         let mut rename_failed = (false, None); // Occured, Error type
 
-        for name in 0..old.len() { // Loops through all the old names
-            if new.row_data(name).unwrap() != old[name].name { // Checks if the new name doesn't equal the old name
+        for name in 0..old.len() {
+            // Loops through all the old names
+            if new.row_data(name).unwrap() != old[name].name {
+                // Checks if the new name doesn't equal the old name
                 if new
                     .row_data(name)
                     .unwrap()
-                    .contains(&String::from("Default taken...")) // Checks if the new name contains the fallback name
+                    .contains(&String::from("Default taken..."))
+                // Checks if the new name contains the fallback name
                 {
                     recording_list.push(Recording::from(&old[name].name, old[name].parse())); // Pushes the old name to the list of names
                     fallback_error_occured = true;
                     break;
-                } else if new.row_data(name).unwrap() == String::from("settings") { // Checks if the new name is 'settings'
+                } else if new.row_data(name).unwrap() == String::from("settings") {
+                    // Checks if the new name is 'settings'
                     recording_list.push(Recording::from(&old[name].name, old[name].parse()));
                     save_file_rename_error_occured = true;
                     break;
                 } else if new.row_data(name).unwrap().is_empty()
-                    || new.row_data(name).unwrap() == String::from("") // Checks if the new name doesn't exist or equals ''
+                    || new.row_data(name).unwrap() == String::from("")
+                // Checks if the new name doesn't exist or equals ''
                 {
                     recording_list.push(Recording::from(&old[name].name, old[name].parse()));
                     empty_error_occured = true;
                     break;
-                } else if File::exists(String::from(new.row_data(name).unwrap()), &old) { // Checks if the new name already exists
+                } else if File::exists(String::from(new.row_data(name).unwrap()), &old) {
+                    // Checks if the new name already exists
                     recording_list.push(Recording::from(&old[name].name, old[name].parse()));
                     exists_error_occured = true;
                     break;
                 } else {
-                    match File::rename(&old[name].name, String::from(new.row_data(name).unwrap())) { // Renames file if all the checks pass
+                    match File::rename(&old[name].name, String::from(new.row_data(name).unwrap())) {
+                        // Renames file if all the checks pass
                         Some(error) => {
                             rename_failed = (true, Some(error));
                         }
@@ -654,11 +724,13 @@ impl Recording {
                     )); // Pushes new name to list
                 }
             } else {
-                recording_list.push(Recording::from(&old[name].name, old[name].parse())); // Skips recordings that were unchanged
+                recording_list.push(Recording::from(&old[name].name, old[name].parse()));
+                // Skips recordings that were unchanged
             }
         }
 
-        if exists_error_occured { // Checks if any errors occured and returns them and a list or just a list
+        if exists_error_occured {
+            // Checks if any errors occured and returns them and a list or just a list
             Err((recording_list, Error::ExistsError))
         } else if empty_error_occured {
             Err((recording_list, Error::EmptyError))
@@ -673,11 +745,13 @@ impl Recording {
         }
     }
 
-    fn shuffle(length: usize) -> Vec<i32> { // Shuffles recordings
+    fn shuffle(length: usize) -> Vec<i32> {
+        // Shuffles recordings
         let mut new = vec![];
         let mut avaliable = vec![];
 
-        for number in 0..length { // Creates a list of numbers 0 to list length -1
+        for number in 0..length {
+            // Creates a list of numbers 0 to list length -1
             avaliable.push(number);
         }
 
@@ -699,27 +773,31 @@ struct Settings {
 }
 
 impl Settings {
-    fn new() -> Settings { // Creates empty settings data
+    fn new() -> Settings {
+        // Creates empty settings data
         Settings {
             presets: vec![],
             recordings: vec![],
         }
     }
 
-    fn get_index_data(&self) -> IndexData { // Gets the length of each list in the settings struct
+    fn get_index_data(&self) -> IndexData {
+        // Gets the length of each list in the settings struct
         IndexData {
             preset_length: self.presets.len(),
             recording_length: self.recordings.len(),
         }
     }
 
-    fn sync(&mut self, ui: &AppWindow) { // Sync settings data with files and UI
+    fn sync(&mut self, ui: &AppWindow) {
+        // Sync settings data with files and UI
         let index_data = self.get_index_data();
 
         let mut dials = [0, 0, 0, 0, 0, 0];
         if self.recordings.len() > 0 {
             for index in 0..6 {
-                dials[index] = ui.get_current_dial_values().row_data(index).unwrap(); // Gets dial values from UI
+                dials[index] = ui.get_current_dial_values().row_data(index).unwrap();
+                // Gets dial values from UI
             }
         }
 
@@ -740,7 +818,8 @@ impl Settings {
         if ui.get_preset_renamed() {
             for preset in 0..index_data.preset_length {
                 self.presets[preset].name =
-                    String::from(match ui.get_preset_names().row_data(preset) { // Renames preset with the value in the UI
+                    String::from(match ui.get_preset_names().row_data(preset) {
+                        // Renames preset with the value in the UI
                         Some(name) => name,
                         None => SharedString::from("New Preset"), // Sets to default value if something went wrong retrieving the new name form the UI
                     });
@@ -751,7 +830,8 @@ impl Settings {
         if index_data.recording_length > 0 {
             let position = ui.get_current_recording() as usize;
             if ui.get_dials_edited() {
-                self.recordings[position] = Recording::from(&self.recordings[position].name, dials); // Updates settings data with edited values
+                self.recordings[position] = Recording::from(&self.recordings[position].name, dials);
+                // Updates settings data with edited values
             }
         }
 
@@ -764,7 +844,8 @@ impl Settings {
 
         // Check for recording renaming
         if ui.get_recording_renamed() {
-            self.recordings = match Recording::rename(&self.recordings, ui.get_recording_names()) { // Renames recording
+            self.recordings = match Recording::rename(&self.recordings, ui.get_recording_names()) {
+                // Renames recording
                 Ok(value) => value,
                 Err(error) => {
                     error.1.send(ui); // Sends error value to UI
@@ -781,7 +862,8 @@ impl Settings {
                 String::new()
             }
         };
-        let file_names = match File::search(&path, "wav", true) { // Gets wav file names
+        let file_names = match File::search(&path, "wav", true) {
+            // Gets wav file names
             Ok(File::Names(value)) => value,
             Err(error) => {
                 error.send(ui);
@@ -789,7 +871,8 @@ impl Settings {
             }
         };
 
-        let mut snapshot_names = match File::search(&path, "bin", true) { // Gets binary file names
+        let mut snapshot_names = match File::search(&path, "bin", true) {
+            // Gets binary file names
             Ok(File::Names(value)) => value,
             Err(error) => {
                 error.send(ui);
@@ -807,10 +890,12 @@ impl Settings {
         let mut updated_recordings = vec![];
 
         if file_names.len() > 0 {
-            for name in 0..file_names.len() { // Loops over all the names
+            for name in 0..file_names.len() {
+                // Loops over all the names
                 if self.recordings.len() > 0 {
                     for recording in 0..self.recordings.len() {
-                        if self.recordings[recording].name == file_names[name] { // If the recording is known, then add the old recording to the list
+                        if self.recordings[recording].name == file_names[name] {
+                            // If the recording is known, then add the old recording to the list
                             updated_recordings.push(Recording::from(
                                 &file_names[name],
                                 Recording::parse(&self.recordings[recording]),
@@ -818,18 +903,20 @@ impl Settings {
                             break;
                         }
                         if recording == self.recordings.len() - 1 {
-                            updated_recordings.push(Recording::new(&file_names[name])); // If it's unknown then create a new recording
+                            updated_recordings.push(Recording::new(&file_names[name]));
+                            // If it's unknown then create a new recording
                         }
                     }
                 } else {
                     updated_recordings.push(Recording::new(&file_names[name])); // Adds new recording to settings data
                 }
-    
+
                 // Syncs snapshots
                 if snapshot_names.len() > 0 {
                     for file in 0..snapshot_names.len() {
                         if snapshot_names.len() > 0 {
-                            if file_names[name] != snapshot_names[file] { // If the names of the files and snapshots don't match then create a new snapshot file
+                            if file_names[name] != snapshot_names[file] {
+                                // If the names of the files and snapshots don't match then create a new snapshot file
                                 match SnapShot::create(&file_names[name]) {
                                     Some(error) => {
                                         error.send(ui);
@@ -843,7 +930,8 @@ impl Settings {
                         }
                     }
                 } else {
-                    match SnapShot::create(&file_names[name]) { // Creates a new snapshot if there's a file but no snapshots
+                    match SnapShot::create(&file_names[name]) {
+                        // Creates a new snapshot if there's a file but no snapshots
                         Some(error) => {
                             error.send(ui);
                         }
@@ -861,15 +949,16 @@ impl Settings {
 struct Tracker {
     settings: Arc<RwLock<Settings>>,
     locked: Arc<RwLock<Recording>>, // Values to hold while locked
-    playing: Arc<RwLock<bool>>, // Something is playing
+    playing: Arc<RwLock<bool>>,     // Something is playing
     snapshot_frame_values: Arc<RwLock<[i32; 6]>>, // Values of the currently active snapshot frame group
-    empty_recording: Arc<RwLock<bool>>, // Whether the newest reecording is empty
+    empty_recording: Arc<RwLock<bool>>,           // Whether the newest reecording is empty
     recording_check: Arc<RwLock<bool>>, // Whether a recording is in progress or just happened
-    preloaded: Arc<RwLock<bool>>, // Whether any audio data is loaded in memory
+    preloaded: Arc<RwLock<bool>>,       // Whether any audio data is loaded in memory
 }
 
 impl Tracker {
-    fn new(settings: Settings) -> Tracker { // Creates a new tracker
+    fn new(settings: Settings) -> Tracker {
+        // Creates a new tracker
         Tracker {
             settings: Arc::new(RwLock::new(settings)),
             locked: Arc::new(RwLock::new(Recording::new(&String::new()))),
@@ -881,25 +970,30 @@ impl Tracker {
         }
     }
 
-    fn write<T>(handle: Arc<RwLock<T>>, set: T) { // Wrtes data to tracked data
+    fn write<T>(handle: Arc<RwLock<T>>, set: T) {
+        // Wrtes data to tracked data
         let mut writer = handle.write().unwrap();
         *writer = set;
     }
 
-    fn read<T: Copy>(handle: Arc<RwLock<T>>) -> T { // Reads and returns tracked data
+    fn read<T: Copy>(handle: Arc<RwLock<T>>) -> T {
+        // Reads and returns tracked data
         let reader = handle.read().unwrap();
         *reader
     }
 }
 
 // -------- Functions --------
-fn save(data: DataType, file: &str) -> Option<Error> { // Save data to files
+fn save(data: DataType, file: &str) -> Option<Error> {
+    // Save data to files
     let path = match File::get_directory() {
         Ok(value) => value,
         Err(error) => return Some(error),
     };
-    match data { // Checks if saving settings data or snapshot data
-        DataType::Settings(value) => match save_file(format!("{}/{}.bin", path, file), 0, &value) { // Saves settings daat
+    match data {
+        // Checks if saving settings data or snapshot data
+        DataType::Settings(value) => match save_file(format!("{}/{}.bin", path, file), 0, &value) {
+            // Saves settings daat
             Ok(_) => {
                 return None;
             }
@@ -907,11 +1001,13 @@ fn save(data: DataType, file: &str) -> Option<Error> { // Save data to files
                 return Some(Error::SaveError);
             }
         },
-        DataType::SnapShot(value) => match save_file(format!("{}/{}.bin", path, file), 0, &value) { // Saves snapshot data
+        DataType::SnapShot(value) => match save_file(format!("{}/{}.bin", path, file), 0, &value) {
+            // Saves snapshot data
             Ok(_) => {
                 return None;
             }
-            Err(_) => match save_file(format!("{}.bin", file), 0, &value) { // Tries again but without the path variable incase file was inputted as a path
+            Err(_) => match save_file(format!("{}.bin", file), 0, &value) {
+                // Tries again but without the path variable incase file was inputted as a path
                 Ok(_) => None,
                 Err(_) => Some(Error::SaveError),
             },
@@ -919,13 +1015,16 @@ fn save(data: DataType, file: &str) -> Option<Error> { // Save data to files
     }
 }
 
-fn load(file: &str, kind: LoadType) -> Result<DataType, Error> { // Loads data from file
+fn load(file: &str, kind: LoadType) -> Result<DataType, Error> {
+    // Loads data from file
     let path = match File::get_directory() {
         Ok(value) => value,
         Err(error) => return Err(error),
     };
-    match kind { // Checks to see what kind of data it should be loading
-        LoadType::Settings => match load_file(format!("{}/{}.bin", path, file), 0) { // Loads settings data
+    match kind {
+        // Checks to see what kind of data it should be loading
+        LoadType::Settings => match load_file(format!("{}/{}.bin", path, file), 0) {
+            // Loads settings data
             Ok(value) => {
                 return Ok(DataType::Settings(value));
             }
@@ -933,7 +1032,8 @@ fn load(file: &str, kind: LoadType) -> Result<DataType, Error> { // Loads data f
                 return Err(Error::LoadError);
             }
         },
-        LoadType::Snapshot => match load_file(format!("{}/{}.bin", path, file), 0) { // Loads snapshot data
+        LoadType::Snapshot => match load_file(format!("{}/{}.bin", path, file), 0) {
+            // Loads snapshot data
             Ok(value) => {
                 return Ok(DataType::SnapShot(value));
             }
@@ -952,7 +1052,8 @@ fn main() -> Result<(), Box<dyn STDError>> {
     // Creates a variable that can be used across threads and move blocks and can be read from without locking
     let tracker = Arc::new(Tracker::new(match load("settings", LoadType::Settings) {
         Ok(DataType::Settings(value)) => value, // Loads settings
-        Ok(DataType::SnapShot(_)) => { // If passed snapshot data then create new settings and save the file
+        Ok(DataType::SnapShot(_)) => {
+            // If passed snapshot data then create new settings and save the file
             Tracker::write(errors.clone(), Some(Error::LoadError));
             match save(DataType::Settings(Settings::new()), "settings") {
                 Some(error) => {
@@ -982,7 +1083,8 @@ fn main() -> Result<(), Box<dyn STDError>> {
     match thread::Builder::new() // Spawns a new thread for recording audio
         .name(String::from("Recorder"))
         .spawn(move || {
-            let audio_spec = WavSpec { // Decides on the settings of the recording
+            let audio_spec = WavSpec {
+                // Decides on the settings of the recording
                 channels: 2,
                 sample_rate: 48000,
                 bits_per_sample: 32,
@@ -999,7 +1101,8 @@ fn main() -> Result<(), Box<dyn STDError>> {
 
             let empty = recording_empty_handle.clone(); // New reference for the loop do avoid memory issues
             loop {
-                match record_receiver.recv() { // Blocks until message received
+                match record_receiver.recv() {
+                    // Blocks until message received
                     Ok(Message::StartRecording) => (),
                     _ => {
                         Tracker::write(record_error_handle.clone(), Some(Error::MessageError));
@@ -1016,7 +1119,8 @@ fn main() -> Result<(), Box<dyn STDError>> {
                 };
 
                 let mut fallbacks = 0;
-                for name in &taken_names { // Checks how many times something has had to been renamed to the fallback name
+                for name in &taken_names {
+                    // Checks how many times something has had to been renamed to the fallback name
                     if (*name).contains(&String::from("Default taken...")) {
                         fallbacks += 1;
                     }
@@ -1029,7 +1133,8 @@ fn main() -> Result<(), Box<dyn STDError>> {
                 if recording_amount > 0 {
                     let potential = format!("Recording {}", recording_amount + 1); // Tests a potential name
                     for item in 0..recording_amount {
-                        if potential != taken_names[item] { // If the potential name isn't already a thing
+                        if potential != taken_names[item] {
+                            // If the potential name isn't already a thing
                             new_name = format!("{}.wav", potential); // Update new name
                         } else {
                             new_name = format!("Default taken... {}.wav", fallbacks + 1); // Makes a new default taken name if it has been taken
@@ -1052,19 +1157,22 @@ fn main() -> Result<(), Box<dyn STDError>> {
                 let mut initial_silence = true;
 
                 let empty2 = empty.clone(); // New reference to avoid more memory issues
-                let record_callback = move |data: RUBuffers| { // Run when callback called
+                let record_callback = move |data: RUBuffers| {
+                    // Run when callback called
                     let mut interleaved = vec![];
 
                     let channel1_len = data[0].len();
                     let channel2_len = data[1].len();
 
-                    for sample in 0..(if channel1_len > channel2_len { // Loops through the channel with the least amount of data
+                    for sample in 0..(if channel1_len > channel2_len {
+                        // Loops through the channel with the least amount of data
                         channel2_len
                     } else {
                         channel1_len
                     }) {
                         if initial_silence {
-                            if data[0][sample] != 0.0 || data[1][sample] != 0.0 { // If either channel has audio playing
+                            if data[0][sample] != 0.0 || data[1][sample] != 0.0 {
+                                // If either channel has audio playing
                                 initial_silence = false;
                                 Tracker::write(empty2.clone(), false); // Tells the tracker that this recording should be saved
                                 continue;
@@ -1089,7 +1197,8 @@ fn main() -> Result<(), Box<dyn STDError>> {
 
                 let mut recorder = RUHear::new(callback); // Creates a new recorder
 
-                match recorder.start() { // Starts a recorder
+                match recorder.start() {
+                    // Starts a recorder
                     Ok(_) => {}
                     Err(_) => {
                         Tracker::write(record_error_handle.clone(), Some(Error::RecordError));
@@ -1098,7 +1207,8 @@ fn main() -> Result<(), Box<dyn STDError>> {
                 };
 
                 loop {
-                    match record_receiver.recv() { // Blocks until a stop message is received
+                    match record_receiver.recv() {
+                        // Blocks until a stop message is received
                         Ok(Message::StopRecording) => break,
                         _ => {
                             Tracker::write(record_error_handle.clone(), Some(Error::MessageError));
@@ -1107,7 +1217,8 @@ fn main() -> Result<(), Box<dyn STDError>> {
                     }
                 }
 
-                match recorder.stop() { // Stops recording
+                match recorder.stop() {
+                    // Stops recording
                     Ok(_) => {}
                     Err(_) => {
                         Tracker::write(record_error_handle.clone(), Some(Error::RecordError));
@@ -1115,8 +1226,10 @@ fn main() -> Result<(), Box<dyn STDError>> {
                     }
                 };
 
-                if Tracker::read(empty.clone()) { // If recording empty
-                    match File::delete(File::truncate(&mut new_name, ".", 0)) { // Delete any recording data that had been saved so far
+                if Tracker::read(empty.clone()) {
+                    // If recording empty
+                    match File::delete(File::truncate(&mut new_name, ".", 0)) {
+                        // Delete any recording data that had been saved so far
                         Some(_) => {
                             Tracker::write(
                                 record_error_handle.clone(),
@@ -1153,10 +1266,12 @@ fn main() -> Result<(), Box<dyn STDError>> {
             let mut file;
 
             'one: loop {
-                match audio_receiver.recv() { // Blocks until a load file message is received
+                match audio_receiver.recv() {
+                    // Blocks until a load file message is received
                     Ok(Message::File(name)) => {
                         file = name;
-                        sound_data = match StaticSoundData::from_file(&file) { // Loads audio data from file
+                        sound_data = match StaticSoundData::from_file(&file) {
+                            // Loads audio data from file
                             Ok(value) => {
                                 length = value.duration(); // Gets the length of the audio
                                 Tracker::write(loaded.clone(), true);
@@ -1176,13 +1291,15 @@ fn main() -> Result<(), Box<dyn STDError>> {
 
                 'two: loop {
                     let mut capturing = false;
-                    match audio_receiver.recv() { // Blocks until message received
+                    match audio_receiver.recv() {
+                        // Blocks until message received
                         Ok(Message::File(_)) => break 'two, // Breaks the second loop to load a file
                         Ok(Message::PlayAudio(mut playback)) => {
                             if let Playback::Capture(_) = playback.0 {
                                 capturing = true; // Sets capturing check to true if playback type is Capture
                             }
-                            let mut audio_manager = match AudioManager::<DefaultBackend>::new( // Create a new audio manager
+                            let mut audio_manager = match AudioManager::<DefaultBackend>::new(
+                                // Create a new audio manager
                                 AudioManagerSettings::default(),
                             ) {
                                 Ok(value) => value,
@@ -1216,7 +1333,8 @@ fn main() -> Result<(), Box<dyn STDError>> {
                             let mut treble_handle = builder.add_effect(treble);
                             let mut panning_handle = builder.add_effect(pan);
 
-                            let mut track = match audio_manager.add_sub_track(builder) { // Creates a track with the filter handles enabled
+                            let mut track = match audio_manager.add_sub_track(builder) {
+                                // Creates a track with the filter handles enabled
                                 Ok(value) => value,
                                 Err(_) => {
                                     Tracker::write(
@@ -1227,7 +1345,8 @@ fn main() -> Result<(), Box<dyn STDError>> {
                                 }
                             };
 
-                            let _ = match track.play(sound_data.clone()) { // Plays the track
+                            let _ = match track.play(sound_data.clone()) {
+                                // Plays the track
                                 Ok(value) => value,
                                 Err(_) => {
                                     Tracker::write(
@@ -1242,7 +1361,8 @@ fn main() -> Result<(), Box<dyn STDError>> {
                             let mut frame: usize = 0;
                             let mut previous_frame = [0, 0, 0, 0, 0, 0];
                             let mut edited_frame: usize = 0;
-                            let mut snapshot = if let Playback::Capture(ref data) = playback.0 { // Gets snapshot data
+                            let mut snapshot = if let Playback::Capture(ref data) = playback.0 {
+                                // Gets snapshot data
                                 capturing = true;
                                 data.clone()
                             } else if let Playback::Input(ref data) = playback.0 {
@@ -1252,8 +1372,10 @@ fn main() -> Result<(), Box<dyn STDError>> {
                             } else {
                                 SnapShot::new()
                             };
-                            while start.elapsed() < length { // Loops while the time spent playing is less than the length of the audio
-                                match audio_receiver.try_recv() { // Blocks until a file, stop, or playback message is received
+                            while start.elapsed() < length {
+                                // Loops while the time spent playing is less than the length of the audio
+                                match audio_receiver.try_recv() {
+                                    // Blocks until a file, stop, or playback message is received
                                     Ok(Message::StopAudio) => {
                                         if capturing {
                                             snapshot.frames.remove(0);
@@ -1302,25 +1424,35 @@ fn main() -> Result<(), Box<dyn STDError>> {
                                         }
                                         continue 'two; // Stops playing
                                     }
-                                    Ok(Message::PlayAudio((value, _))) => { // Changes type of playback
+                                    Ok(Message::PlayAudio((value, _))) => {
+                                        // Changes type of playback
                                         playback.0 = value;
                                         if let Playback::Input(ref frames) = playback.0 {
                                             snapshot = frames.clone();
-                                            Tracker::write(player_frame_handle.clone(), snapshot.frames[edited_frame].0);
+                                            Tracker::write(
+                                                player_frame_handle.clone(),
+                                                snapshot.frames[edited_frame].0,
+                                            );
                                         }
                                     }
                                     _ => (),
                                 }
-                                if let Playback::Input(_) = playback.0 { // If playback type equals input playback
+                                if let Playback::Input(_) = playback.0 {
+                                    // If playback type equals input playback
                                     if edited_frame < snapshot.frames.len() {
-                                        if frame == snapshot.frames[edited_frame].1 as usize { // If current frame is the same as the one saved in the the snapshot data
-                                            Tracker::write(player_frame_handle.clone(), snapshot.frames[edited_frame].0); // Write dial data
-                                            // Set the handle values to edit the audio based on snapshot data
+                                        if frame == snapshot.frames[edited_frame].1 as usize {
+                                            // If current frame is the same as the one saved in the the snapshot data
+                                            Tracker::write(
+                                                player_frame_handle.clone(),
+                                                snapshot.frames[edited_frame].0,
+                                            ); // Write dial data
+                                               // Set the handle values to edit the audio based on snapshot data
                                             sub_bass_handle.set_gain(
                                                 if snapshot.frames[edited_frame].0[0] == -7 {
                                                     -60.0 // Make silent if value is -7
                                                 } else {
-                                                    snapshot.frames[edited_frame].0[0] as f32 * 4.0 // Multiply dial value by 4 to hear a difference
+                                                    snapshot.frames[edited_frame].0[0] as f32 * 4.0
+                                                    // Multiply dial value by 4 to hear a difference
                                                 },
                                                 Tween::default(),
                                             );
@@ -1365,12 +1497,15 @@ fn main() -> Result<(), Box<dyn STDError>> {
                                 } else {
                                     let settings = player_settings_handle.read().unwrap();
 
-                                    if let Playback::Capture(_) = playback.0 { // If capturing inputs
-                                        if SnapShot::edited( // Checks if a change has been made to the dials since the last change
+                                    if let Playback::Capture(_) = playback.0 {
+                                        // If capturing inputs
+                                        if SnapShot::edited(
+                                            // Checks if a change has been made to the dials since the last change
                                             previous_frame,
                                             Recording::parse(&settings.recordings[playback.1]),
                                         ) {
-                                            snapshot.frames.push(( // Pushes new values to list
+                                            snapshot.frames.push((
+                                                // Pushes new values to list
                                                 Recording::parse(&settings.recordings[playback.1]),
                                                 frame as i32,
                                             ));
@@ -1428,7 +1563,8 @@ fn main() -> Result<(), Box<dyn STDError>> {
                                     drop(settings); // Drop read access of settings
                                 }
 
-                                if !capturing { // Increases edited frame if equal to snapshot data so it remains in sync if you swap playback type
+                                if !capturing {
+                                    // Increases edited frame if equal to snapshot data so it remains in sync if you swap playback type
                                     if frame
                                         == snapshot.frames[if edited_frame < snapshot.frames.len() {
                                             edited_frame
@@ -1447,7 +1583,8 @@ fn main() -> Result<(), Box<dyn STDError>> {
 
                             Tracker::write(player_finished.clone(), true); // Tells the tracker that playback is finished
 
-                            if capturing { // Saves captured inputs to file
+                            if capturing {
+                                // Saves captured inputs to file
                                 match snapshot.save(&File::truncate(&mut file, ".", 0)) {
                                     Some(error) => {
                                         Tracker::write(player_error_handle.clone(), Some(error));
@@ -1482,7 +1619,8 @@ fn main() -> Result<(), Box<dyn STDError>> {
         move || {
             let ui = ui_handle.unwrap();
 
-            match Tracker::read(error_handle.clone()) { // Checks for errors
+            match Tracker::read(error_handle.clone()) {
+                // Checks for errors
                 Some(error) => {
                     error.send(&ui);
                     Tracker::write(error_handle.clone(), None);
@@ -1490,7 +1628,8 @@ fn main() -> Result<(), Box<dyn STDError>> {
                 None => {}
             };
 
-            if ui.get_started() { // Syncs settings data on initial load
+            if ui.get_started() {
+                // Syncs settings data on initial load
                 // Acquires write access to the loaded data
                 let mut settings = startup_ref_count.write().unwrap();
                 settings.sync(&ui);
@@ -1524,7 +1663,8 @@ fn main() -> Result<(), Box<dyn STDError>> {
                 ));
             }
 
-            if ui.get_current_recording() < settings.recordings.len() as i32 { // Sets dial values to current recording data
+            if ui.get_current_recording() < settings.recordings.len() as i32 {
+                // Sets dial values to current recording data
                 ui.set_current_dial_values(ModelRc::new(VecModel::from(
                     settings.recordings[ui.get_current_recording() as usize]
                         .parse_vec_from_recording(),
@@ -1548,12 +1688,14 @@ fn main() -> Result<(), Box<dyn STDError>> {
 
             let mut locked = locked_handle.write().unwrap();
 
-            if settings.recordings.len() > 0 { // Sets locked vales to current recording data
+            if settings.recordings.len() > 0 {
+                // Sets locked vales to current recording data
                 ui.set_dial_values_when_locked(Recording::send_values(
                     &settings.recordings,
                     &settings.get_index_data().recording_length,
                 ));
-                *locked = settings.recordings[ui.get_current_recording() as usize].clone(); // Sets tracker locked values
+                *locked = settings.recordings[ui.get_current_recording() as usize].clone();
+                // Sets tracker locked values
             }
         }
     });
@@ -1642,7 +1784,8 @@ fn main() -> Result<(), Box<dyn STDError>> {
         move || {
             let ui = ui_handle.unwrap();
 
-            match sender_handle.send(if ui.get_recording() { // Sends message to recording thread
+            match sender_handle.send(if ui.get_recording() {
+                // Sends message to recording thread
                 // Sends stop message and updates UI
                 ui.set_recording(false);
                 Message::StopRecording
@@ -1672,7 +1815,8 @@ fn main() -> Result<(), Box<dyn STDError>> {
         move || {
             let ui = ui_handle.unwrap();
 
-            match File::delete(String::from(ui.get_deleted_recording_name())) { // Deletes recordings
+            match File::delete(String::from(ui.get_deleted_recording_name())) {
+                // Deletes recordings
                 Some(error) => {
                     error.send(&ui);
                 }
@@ -1702,7 +1846,8 @@ fn main() -> Result<(), Box<dyn STDError>> {
 
             Tracker::write(preloaded_handle.clone(), false); // Tells thread that nothing has been preloaded
 
-            let file = if settings.recordings.len() > 0 { // Gets the name of the recording that should be played
+            let file = if settings.recordings.len() > 0 {
+                // Gets the name of the recording that should be played
                 settings.recordings[ui.get_current_recording() as usize]
                     .name
                     .clone()
@@ -1718,7 +1863,8 @@ fn main() -> Result<(), Box<dyn STDError>> {
                 }
             };
 
-            let snapshot_data = if settings.recordings.len() > 0 { // Loads the snapshot data of that recording
+            let snapshot_data = if settings.recordings.len() > 0 {
+                // Loads the snapshot data of that recording
                 match load(
                     &settings.recordings[ui.get_current_recording() as usize].name,
                     LoadType::Snapshot,
@@ -1734,21 +1880,25 @@ fn main() -> Result<(), Box<dyn STDError>> {
             };
 
             if settings.recordings.len() > 0 {
-                for _ in 0..if ui.get_starting_threads() { // If threads are starting for the first time only send load messgae once, otherwise twice
+                for _ in 0..if ui.get_starting_threads() {
+                    // If threads are starting for the first time only send load messgae once, otherwise twice
                     ui.set_starting_threads(false);
                     1
                 } else {
                     2
                 } {
-                    match sender_handle.send(Message::File(format!("{}/{}.wav", path, file))) { // Sends load message and file path
+                    match sender_handle.send(Message::File(format!("{}/{}.wav", path, file))) {
+                        // Sends load message and file path
                         Ok(_) => (),
                         Err(_) => {
                             Tracker::write(error_handle.clone(), Some(Error::PlaybackError));
                         }
                     }
                 }
-                if ui.get_audio_playback() { // If already generic playing
-                    match sender_handle.send(Message::PlayAudio(( // Sends message to play new recording as a generic playback along with snapshot data
+                if ui.get_audio_playback() {
+                    // If already generic playing
+                    match sender_handle.send(Message::PlayAudio((
+                        // Sends message to play new recording as a generic playback along with snapshot data
                         Playback::Generic(snapshot_data),
                         ui.get_current_recording() as usize,
                     ))) {
@@ -1757,8 +1907,10 @@ fn main() -> Result<(), Box<dyn STDError>> {
                             Tracker::write(error_handle.clone(), Some(Error::PlaybackError));
                         }
                     }
-                } else if ui.get_input_playback() { // If already input playback
-                    match sender_handle.send(Message::PlayAudio(( // Sends message to play new recordings input data along with its snapshot data
+                } else if ui.get_input_playback() {
+                    // If already input playback
+                    match sender_handle.send(Message::PlayAudio((
+                        // Sends message to play new recordings input data along with its snapshot data
                         Playback::Input(snapshot_data),
                         ui.get_current_recording() as usize,
                     ))) {
@@ -1767,7 +1919,8 @@ fn main() -> Result<(), Box<dyn STDError>> {
                             Tracker::write(error_handle.clone(), Some(Error::PlaybackError));
                         }
                     }
-                } else if ui.get_input_recording() { // If recording inputs
+                } else if ui.get_input_recording() {
+                    // If recording inputs
                     for _ in 0..2 {
                         let snapshot_data = SnapShot::new(); // Send message to record inputs twice
                         match sender_handle.send(Message::PlayAudio((
@@ -1782,7 +1935,8 @@ fn main() -> Result<(), Box<dyn STDError>> {
                     }
                 }
 
-                ui.set_current_dial_values(ModelRc::new(VecModel::from( // Set dial values
+                ui.set_current_dial_values(ModelRc::new(VecModel::from(
+                    // Set dial values
                     settings.recordings[ui.get_current_recording() as usize]
                         .parse_vec_from_recording(),
                 )));
@@ -1790,7 +1944,7 @@ fn main() -> Result<(), Box<dyn STDError>> {
         }
     });
 
-     // On generic playback
+    // On generic playback
     ui.on_play_generic({
         let ui_handle = ui.as_weak();
 
@@ -1807,7 +1961,8 @@ fn main() -> Result<(), Box<dyn STDError>> {
 
             let settings = settings_handle.read().unwrap();
 
-            let snapshot_data = match load( // Load snapshot data
+            let snapshot_data = match load(
+                // Load snapshot data
                 &settings.recordings[ui.get_current_recording() as usize].name,
                 LoadType::Snapshot,
             ) {
@@ -1820,7 +1975,8 @@ fn main() -> Result<(), Box<dyn STDError>> {
 
             if Tracker::read(preloaded_handle.clone()) {
                 () // Do nothing if data has been preloaded
-            } else { // Load new data
+            } else {
+                // Load new data
                 let file = if settings.recordings.len() > 0 {
                     settings.recordings[ui.get_current_recording() as usize]
                         .name
@@ -1845,7 +2001,8 @@ fn main() -> Result<(), Box<dyn STDError>> {
                 }
             }
 
-            match sender_handle.send(if ui.get_audio_playback() { // Send message to start and stop playback and update UI accordingly
+            match sender_handle.send(if ui.get_audio_playback() {
+                // Send message to start and stop playback and update UI accordingly
                 ui.set_audio_playback(false);
                 ui.set_input_playback(false);
                 ui.set_input_recording(false);
@@ -1865,9 +2022,9 @@ fn main() -> Result<(), Box<dyn STDError>> {
                 }
             }
 
-            ui.set_current_dial_values(ModelRc::new(VecModel::from( // Update dial values
-                settings.recordings[ui.get_current_recording() as usize]
-                    .parse_vec_from_recording(),
+            ui.set_current_dial_values(ModelRc::new(VecModel::from(
+                // Update dial values
+                settings.recordings[ui.get_current_recording() as usize].parse_vec_from_recording(),
             )));
         }
     });
@@ -1891,7 +2048,8 @@ fn main() -> Result<(), Box<dyn STDError>> {
 
             let settings = settings_handle.read().unwrap();
 
-            let snapshot_data = match load( // Load snapshot data
+            let snapshot_data = match load(
+                // Load snapshot data
                 &settings.recordings[ui.get_current_recording() as usize].name,
                 LoadType::Snapshot,
             ) {
@@ -1902,7 +2060,10 @@ fn main() -> Result<(), Box<dyn STDError>> {
                 }
             };
 
-            Tracker::write(dials.clone(), Recording::parse(&settings.recordings[ui.get_current_recording() as usize]));
+            Tracker::write(
+                dials.clone(),
+                Recording::parse(&settings.recordings[ui.get_current_recording() as usize]),
+            );
 
             if Tracker::read(preloaded_handle.clone()) {
                 ()
@@ -2045,10 +2206,12 @@ fn main() -> Result<(), Box<dyn STDError>> {
         move || {
             let ui = ui_handle.unwrap();
 
-            if Tracker::read(finished.clone()) { // If finished playing
+            if Tracker::read(finished.clone()) {
+                // If finished playing
                 let settings = settings_handle.read().unwrap();
 
-                let snapshot_data = match load( // Load snapshot data
+                let snapshot_data = match load(
+                    // Load snapshot data
                     &settings.recordings[ui.get_current_recording() as usize].name,
                     LoadType::Snapshot,
                 ) {
@@ -2058,15 +2221,18 @@ fn main() -> Result<(), Box<dyn STDError>> {
                         SnapShot::new()
                     }
                 };
-                if ui.get_playback() == PlaybackType::None { // If playback type is set to stop playing at the end of the song
+                if ui.get_playback() == PlaybackType::None {
+                    // If playback type is set to stop playing at the end of the song
                     // Update UI and do nothing
                     ui.set_input_recording(false);
                     ui.set_audio_playback(false);
                     ui.set_input_playback(false);
                 } else if ui.get_playback() == PlaybackType::Loop
-                    || ui.get_playback() == PlaybackType::AutoNext // If looping or auto skippng to next song
+                    || ui.get_playback() == PlaybackType::AutoNext
+                // If looping or auto skippng to next song
                 {
-                    match sender_handle.send(if ui.get_input_recording() { // Stop audio if recording inputs
+                    match sender_handle.send(if ui.get_input_recording() {
+                        // Stop audio if recording inputs
                         ui.set_input_recording(false);
                         ui.set_audio_playback(false);
                         ui.set_input_playback(false);
@@ -2077,7 +2243,8 @@ fn main() -> Result<(), Box<dyn STDError>> {
                         )));
                         Message::StopAudio
                     } else {
-                        Message::PlayAudio(( // Send the correct play message to UI depending on what buttin has been pressed
+                        Message::PlayAudio((
+                            // Send the correct play message to UI depending on what buttin has been pressed
                             if ui.get_audio_playback() {
                                 Playback::Generic(snapshot_data)
                             } else if ui.get_input_playback() {
@@ -2093,7 +2260,8 @@ fn main() -> Result<(), Box<dyn STDError>> {
                             Tracker::write(error_handle.clone(), Some(Error::MessageError));
                         }
                     }
-                } else if ui.get_playback() == PlaybackType::AutoNext { // If auto skipping
+                } else if ui.get_playback() == PlaybackType::AutoNext {
+                    // If auto skipping
                     let settings = settings_handle.read().unwrap();
                     // Skips to first recording if on last recording, otherwise skips to next recording
                     if ui.get_current_recording() == (settings.recordings.len() - 1) as i32 {
@@ -2142,7 +2310,8 @@ fn main() -> Result<(), Box<dyn STDError>> {
             match occured {
                 Some(error) => {
                     match error {
-                        Error::MessageError => { // Reload audio if incorrect mesaage sent to thread
+                        Error::MessageError => {
+                            // Reload audio if incorrect mesaage sent to thread
                             // This ensures that it won't keep failing
                             if ui.get_audio_or_input_playback() || ui.get_input_recording() {
                                 let settings = settings_handle.read().unwrap();
