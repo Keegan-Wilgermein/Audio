@@ -539,7 +539,7 @@ export component AppWindow inherits Window {
                                         spacing: 16px;
     
                                         reset := BasicButton {
-                                            enabled: (!preset_renaming_mode && !preset_deleting_mode && !input_playback && can_delete) || input_recording;
+                                            enabled: (!preset_renaming_mode && !preset_deleting_mode && !input_playback && can_delete && !recording) || input_recording;
             
                                             Rectangle {
                                                 border-radius: 8px;
@@ -573,7 +573,7 @@ export component AppWindow inherits Window {
                                     }
         
                                     restore := BasicButton { // Restore locked values preset
-                                        enabled: (!preset_renaming_mode && !preset_deleting_mode && !input_playback && can_delete && locked) || input_recording;
+                                        enabled: (!preset_renaming_mode && !preset_deleting_mode && !input_playback && can_delete && locked && !recording) || input_recording;
         
                                         Rectangle {
                                             border-radius: 8px;
@@ -631,7 +631,7 @@ export component AppWindow inherits Window {
                                     }
     
                                     BasicButton {
-                                        enabled: (!preset_renaming_mode && !input_playback) || input_recording;
+                                        enabled: (!preset_renaming_mode && !input_playback && !recording) || input_recording;
     
                                         Rectangle { // Used for background colour of presets
                                             border-radius: 8px;
