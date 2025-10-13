@@ -1746,6 +1746,8 @@ fn main() -> Result<(), Box<dyn STDError>> {
             // Skips if an empty recording was just created
             if Tracker::read(empty.clone()) && Tracker::read(just_recorded.clone()) {
                 Tracker::write(just_recorded.clone(), false);
+                ui.invoke_skip_audio();
+                ui.invoke_skip_audio();
                 return;
             }
 
@@ -1799,8 +1801,6 @@ fn main() -> Result<(), Box<dyn STDError>> {
                         // If UI not recording then save and shuffle songs
                         ui.invoke_save();
                         ui.invoke_gen_shuffle();
-                        ui.invoke_skip_audio();
-                        ui.invoke_skip_audio();
                     }
                 }
                 Err(_) => {
