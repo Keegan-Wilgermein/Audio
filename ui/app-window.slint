@@ -8,6 +8,7 @@ export enum PlaybackType {
     None,
 }
 
+// What to send to the backend so it knows what to send to the audio thread
 export enum PlaybackAction {
     SendFile,
     Play,
@@ -38,7 +39,7 @@ component ShadowedRectangle inherits Rectangle { // Rectangle with a drop shadow
     }
 }
 
-component ShadowedDial inherits Rectangle { // Rectangle with a drop shadow and a border
+component ShadowedDial inherits Rectangle { // Dial with a drop shadow and a border
     border-radius: 12px;
     background: #242424;
     drop-shadow-color: #151515;
@@ -116,7 +117,7 @@ export component AppWindow inherits Window {
     private property <length> snap_by: 10px; // How far the user needs to move the mouse to cause a dial to rotate
     private property <length> next_dial_snap_position: snap_by; // The next valid position that will recognise a dial rotation
     private property <length> previous_dial_snap_position: snap_by - snap_by; // The previous valid postion that will recognise a dial rotation
-    private property <length> dial_pressed_position: 0px; // The initially clicked position of a dial
+    private property <length> dial_pressed_position: 0px; // Saves the last position of the cursor when a dial is interacted with
     
     // ---- Presets ----
     in-out property <[string]> preset_names: [];
@@ -154,7 +155,6 @@ export component AppWindow inherits Window {
     
     // ---- Audio playback ----
     in-out property <bool> audio_playback: false; // True when playing back audio normally
-    in-out property <bool> backend_not_playing: false; // Used to sync the UI with the state of the backend
     
     // ---- Audio recording ----
     in-out property <bool> recording: false; // Whether a recording is in progress
@@ -173,7 +173,6 @@ export component AppWindow inherits Window {
     // ---- Colour palette ----
     private property <color> transparent_colour: #24242400;
     private property <color> default_background_colour: #242424;
-    private property <color> default_drop_shadow_colour: #151515;
     private property <brush> recording_border_colour: @linear-gradient(90deg, #ffffff 10%, #ffffff00 90%);
     private property <brush> transparent_to_background: @linear-gradient(180deg, error-recieved ? #242424 : #24242400, default_background_colour);
     private property <color> white: #ffffff;
@@ -185,7 +184,6 @@ export component AppWindow inherits Window {
     private property <brush> rename_colour: @linear-gradient(90deg, #3f51b5 30%, transparent_colour 100%);
     private property <brush> delete_colour: @linear-gradient(90deg, #dc4242 30%, transparent_colour 100%);
     private property <color> error_colour: #dc4242;
-    private property <color> highlight_colour: #3e3e3e;
 
     // -------- Callbacks --------
     callback update(); // Updates the UI with values from the backend
@@ -206,6 +204,7 @@ export component AppWindow inherits Window {
 
     // -------- Functions --------
     function play_audio(action: PlaybackAction) {
+        // Decides what callback to call depending on what enum variant is passed into the function
         if action == PlaybackAction.SendFile {
             skip_audio();
         } else if action == PlaybackAction.Play {
@@ -216,44 +215,45 @@ export component AppWindow inherits Window {
             capture_inputs();
         }
     }
-    function sync_current_dial_values_with_recording_values() {
+
+    function sync_current_dial_values_with_recording_values() { // Sets current dial values to the recording values
         if recording_names.length > 1 {
             current_dial_values = recording_values[current_recording];
         }
     }
 
-    function save_dial_edits() {
+    function save_dial_edits() { // Saves changes to dials
         dials_edited = true;
         save();
         dials_edited = false;
     }
 
-    function calculate_skipped_to_recording(forward: bool) {
+    function calculate_skipped_to_recording(forward: bool) { // Calulates which recording to skip to when a skip button is clicked
         if forward { // Checks whehter you skipped forwards or backwards
-            if shuffle {
-                if recording_names.length > 2 {
-                    if current_shuffle_index == shuffle_order.length - 1 {
+            if shuffle { // If shuffling
+                if recording_names.length > 2 { // If there are 3 or more recordings
+                    if current_shuffle_index == shuffle_order.length - 1 { // If on last index in shuffle list, reshuffle and set index to 0
                         gen_shuffle();
                         current_shuffle_index = 0;
                     } else {
-                        current_shuffle_index += 1;
+                        current_shuffle_index += 1; // Otherwise increase shuffle index by one
                     }
-                    current_recording = shuffle_order[current_shuffle_index];
+                    current_recording = shuffle_order[current_shuffle_index]; // Set current recording to shuffle index
                 } else {
-                    if current_recording < recording_names.length - 1 {
-                        current_recording += 1;
+                    if current_recording < recording_names.length - 1 { // If not enough recordings to shuffle and not on last recording
+                        current_recording += 1; // Increase current recording by one
                     } else {
-                        current_recording = 0;
+                        current_recording = 0; // Set current recording to zero
                     }
                 }
-            } else {
+            } else { // If not shuffling
                 if current_recording < recording_names.length - 1 {
                     current_recording += 1;
                 } else {
                     current_recording = 0;
                 }
             }
-        } else {
+        } else { // Do the same but in reverse if function is passed false
             if shuffle {
                 if recording_names.length > 2 {
                     if current_shuffle_index > 0 {
@@ -279,6 +279,7 @@ export component AppWindow inherits Window {
         }
     }
 
+    // Disables buttons on record and sets locked to false
     function disable_buttons_on_record() {
         update_locked_values();
         recording_renaming_mode = false;
@@ -294,13 +295,13 @@ export component AppWindow inherits Window {
 
         triggered => {
             self.running = false;
-            update();
+            update(); // Update UI
             started = false;
             if recording_names.length > 2 {
-                gen_shuffle();
+                gen_shuffle(); // Shuffle
                 current_recording = shuffle_order[0];
             }
-            play_audio(PlaybackAction.SendFile);
+            play_audio(PlaybackAction.SendFile); // Preloads audio
         }
     }
 
@@ -357,23 +358,25 @@ export component AppWindow inherits Window {
 
         triggered => {
             should_delete = false;
-            if recording_deleted {
+            if recording_deleted { // Delete recordings and set current recording to 0
                 delete_recordings();
                 current_recording = 0;
             } else if preset_deleted {
                 save();
             }
-            if recording_names.length > 0 {
+            if recording_names.length > 0 { // If still more than 1 recording, set dials to current value, otherwise set to 0
                 current_dial_values = recording_values[current_recording];
             } else {
                 current_dial_values = [0, 0, 0, 0, 0, 0];
             }
             if recording_deleted {
-                gen_shuffle();
+                gen_shuffle(); // Reshuffle recordings
             }
             recording_deleted = false;
             preset_deleted = false;
-            current_recording = shuffle_order[0];
+            if shuffle {
+                current_recording = shuffle_order[0]; // Set current recording to the first shuffle index
+            }
         }
     }
 
@@ -402,7 +405,7 @@ export component AppWindow inherits Window {
     }
 
     // -------- App layout --------
-    HorizontalLayout {
+    HorizontalLayout { // Dials and list / controls split
         spacing: 32px;
         padding: 12px;
 
@@ -410,44 +413,44 @@ export component AppWindow inherits Window {
         VerticalLayout {
             spacing: 12px;
             
-            for group[index] in dial_names:
-            HorizontalLayout {
+            for group[index] in dial_names: // For each list of dials in the list of all the dials
+            HorizontalLayout { // Layout horizontally
                 spacing: 12px;
 
-                for dial[index2] in group:
-                ShadowedRectangle {
+                for dial[index2] in group: // For the dials in each group
+                ShadowedRectangle { // Expanding container
                     
-                    VerticalLayout {
+                    VerticalLayout { // Center vertically
                         padding: 12px;
                         spacing: 16px;
                         alignment: center;
     
-                        HeadingSmall {
+                        HeadingSmall { // Dial name
                             text: dial;
                             horizontal-alignment: center;
                             vertical-alignment: center;
                         }
 
-                        HorizontalLayout {
+                        HorizontalLayout { // Actual dial
                             alignment: center;
 
-                            TouchArea {
+                            TouchArea { // Used for cursor, that's it
                                 mouse-cursor: self.enabled ? ew-resize : default;
                                 enabled: rotator.enabled;
 
-                                rotator := SwipeGestureHandler {
+                                rotator := SwipeGestureHandler { // Handles clicking and dragging
                                     enabled: (!recording && !input_playback) || input_recording;
                                         
-                                    ShadowedDial {
+                                    ShadowedDial { // Dial visible style
                                         border-radius: 100px;
                                         height: 60px;
                                         width: 60px;
                                         
-                                        HorizontalLayout {
+                                        HorizontalLayout { // Holds Image
                                             padding-top: 12px;
                                             alignment: center;
             
-                                            Image {
+                                            Image { // Line
                                                 source: @image-url("icons/dial.svg");
                                                 height: 40px;
                                                 width: 60px;
@@ -461,28 +464,28 @@ export component AppWindow inherits Window {
                                         }
                                     }
 
-                                    moved => {
-                                        if dial_pressed_position != self.pressed-position.x {
-                                            next_dial_snap_position = snap_by;
-                                            previous_dial_snap_position = snap_by - snap_by;
-                                            dial_pressed_position = self.pressed-position.x;
+                                    moved => { // What to do if dial dragged
+                                        if dial_pressed_position != self.pressed-position.x { // Checks if the dial was dragged and not just clicked
+                                            next_dial_snap_position = snap_by; // Updates the next recognised snap position
+                                            previous_dial_snap_position = snap_by - snap_by; // Updates the previously recognised snap position
+                                            dial_pressed_position = self.pressed-position.x; // Updates the currently interacted with position
                                         }
-                                        if self.current-position.x - self.pressed-position.x > next_dial_snap_position {
-                                            if current_dial_values[index2 + (index * 3)] < 7 {
-                                                current_dial_values[index2 + (index * 3)] += 1;
-                                                previous_dial_snap_position = next_dial_snap_position;
-                                                next_dial_snap_position += snap_by;
+                                        if self.current-position.x - self.pressed-position.x > next_dial_snap_position { // Dragged right
+                                            if current_dial_values[index2 + (index * 3)] < 7 { // Converts from [[]] indexes to [] indexs and checks if the value is less than 7
+                                                current_dial_values[index2 + (index * 3)] += 1; // Increases value by one
+                                                previous_dial_snap_position = next_dial_snap_position; // Updates previous valid snap position
+                                                next_dial_snap_position += snap_by; // Increase next valid snap value
                                                 if recording_names.length > 0 {
-                                                    save_dial_edits();
+                                                    save_dial_edits(); // Save dials to recording
                                                 }
                                             }
-                                        } else if self.current-position.x - self.pressed-position.x < previous_dial_snap_position {
-                                            if current_dial_values[index2 + (index * 3)] > -7 {
-                                                current_dial_values[index2 + (index * 3)] -= 1;
+                                        } else if self.current-position.x - self.pressed-position.x < previous_dial_snap_position { // Dragged left
+                                            if current_dial_values[index2 + (index * 3)] > -7 { // greater than -7
+                                                current_dial_values[index2 + (index * 3)] -= 1; // Decrease by one
                                                 next_dial_snap_position = previous_dial_snap_position;
                                                 previous_dial_snap_position -= snap_by;
                                                 if recording_names.length > 0 {
-                                                    save_dial_edits();
+                                                    save_dial_edits(); // Save dials to recording
                                                 }
                                             }
                                         }
@@ -491,7 +494,7 @@ export component AppWindow inherits Window {
                             }
                         }
     
-                        NormalText {
+                        NormalText { // Dial values
                             text: current_dial_values[index2 + (index * 3)];
                             horizontal-alignment: center;
                             vertical-alignment: center;
@@ -501,664 +504,678 @@ export component AppWindow inherits Window {
             }
         }
 
-        Rectangle {
+        Rectangle { // Container for holding the controls on top of the lists
+    
+            HorizontalLayout { // Layout preset and recording lists
+                spacing: 32px;
 
-            // Presets and recordings
-            VerticalLayout {
-                spacing: 12px;
-                alignment: start;
-    
-                HorizontalLayout {
-                    spacing: 32px;
-    
-                    // Presets
-                    Rectangle {
-                        height: 100%;
-    
-                        ScrollView {
-                            vertical-scrollbar-policy: always-off;
-                                
-                            VerticalLayout {
-                                alignment: start;
-                                padding-top: 56px;
-                                padding-bottom: 112px;
-    
-                                VerticalLayout {
-                                    spacing: locked ? 16px : 0px;
-                                    alignment: start;
-                                    padding-bottom: 4px;
-    
-                                    animate spacing {
-                                        duration: 0.3s;
-                                    }
-    
-                                    VerticalLayout {
-                                        alignment: start;
-                                        spacing: 16px;
-    
-                                        reset := BasicButton {
-                                            enabled: (!preset_renaming_mode && !preset_deleting_mode && !input_playback && can_delete) || input_recording;
-            
-                                            Rectangle {
-                                                border-radius: 8px;
-                                                background: #ffffff00;
-            
-                                                VerticalLayout {
-                                                    spacing: 4px;
-                                                    alignment: start;
-                        
-                                                    HeadingSmall {
-                                                        text: preset_deleting_mode ? "Can't delete preset" : preset_renaming_mode ? "Can't rename preset" : "Reset";
-                                                    }
+                // Presets
+                Rectangle {
+                    height: 100%;
+
+                    ScrollView { // Scrolling list for presets
+                        vertical-scrollbar-policy: always-off;
                             
-                                                    NormalText {
-                                                        text: "0  0  0  0  0  0";
-                                                        vertical-alignment: center;
-                                                        color: reset.enabled ? white : generic_disabled;
-            
-                                                        animate color {
-                                                            duration: 0.2s;
-                                                        }
-                                                    }
-                                                }
-                                            }
-            
-                                            clicked => {
-                                                current_dial_values = [0, 0, 0, 0, 0, 0];
-                                                save_dial_edits();
-                                            }
-                                        }
-                                    }
-        
-                                    restore := BasicButton {
-                                        enabled: (!preset_renaming_mode && !preset_deleting_mode && !input_playback && can_delete && locked) || input_recording;
+                        VerticalLayout { // Layout scrolling items vertically
+                            alignment: start;
+                            padding-top: 56px;
+                            padding-bottom: 112px;
+
+                            VerticalLayout { // Seperate deletable and renamable presets in seperate layouts
+                                spacing: locked ? 16px : 0px;
+                                alignment: start;
+                                padding-bottom: 4px;
+
+                                animate spacing {
+                                    duration: 0.3s;
+                                }
+
+                                VerticalLayout { // Reset dials preset
+                                    alignment: start;
+                                    spacing: 16px;
+
+                                    reset := BasicButton {
+                                        enabled: (!preset_renaming_mode && !preset_deleting_mode && !input_playback && can_delete) || input_recording;
         
                                         Rectangle {
                                             border-radius: 8px;
                                             background: #ffffff00;
         
-                                            VerticalLayout {
-                                                spacing: !locked ? 0px : 4px;
+                                            VerticalLayout { // Layout items vertically
+                                                spacing: 4px;
                                                 alignment: start;
-        
-                                                animate spacing {
-                                                    duration: 0.3s;
-                                                }
                     
-                                                HeadingSmall {
-                                                    text: "Restore values";
-                                                    font-size: !locked ? 1px : 12px;
-                                                    opacity: !locked ? 0% : 100%;
-        
-                                                    animate font-size, opacity {
-                                                        duration: 0.2s;
-                                                        easing: ease-in-out-circ;
-                                                    }
+                                                HeadingSmall { // Preset name
+                                                    text: preset_deleting_mode ? "Can't delete preset" : preset_renaming_mode ? "Can't rename preset" : "Reset";
                                                 }
                         
-                                                NormalText {
-                                                    text: "\{dial_values_when_locked[current_recording][0]}  \{dial_values_when_locked[current_recording][1]}  \{dial_values_when_locked[current_recording][2]}  \{dial_values_when_locked[current_recording][3]}  \{dial_values_when_locked[current_recording][4]}  \{dial_values_when_locked[current_recording][5]}";
+                                                NormalText { // Preset values
+                                                    text: "0  0  0  0  0  0";
                                                     vertical-alignment: center;
-                                                    font-size: !locked ? 1px : 12px;
-                                                    opacity: !locked ? 0% : 100%;
-                                                    color: restore.enabled ? white : generic_disabled;
+                                                    color: reset.enabled ? white : generic_disabled;
         
-                                                    animate font-size, opacity, color {
+                                                    animate color {
                                                         duration: 0.2s;
-                                                        easing: ease-in-out-circ;
                                                     }
                                                 }
                                             }
                                         }
         
-                                        clicked => {
-                                            sync_with_locked_values();
+                                        clicked => { // If preset clicked
+                                            current_dial_values = [0, 0, 0, 0, 0, 0]; // Set dial values to 0
+                                            save_dial_edits(); // Save
                                         }
                                     }
                                 }
     
-                                for preset[index] in preset_values:
-                                VerticalLayout {
-                                    padding-top: preset_deleting_mode && preset_deleted && (deleted_preset_index + 1 == index || deleted_preset_index == index) ? 0px : preset_renaming_mode ? 4px : 8px;
-                                    padding-bottom: preset_deleting_mode && preset_deleted && (deleted_preset_index - 1 == index || deleted_preset_index == index) ? 0px : preset_renaming_mode ? 4px : 8px;
-
-                                    animate padding-top, padding-bottom {
-                                        duration: 0.2s;
-                                        easing: ease-in-out-circ;
-                                    }
-
-                                    BasicButton {
-                                        enabled: (!preset_renaming_mode && !input_playback) || input_recording;
-
-                                        Rectangle {
-                                            border-radius: 8px;
-                                            background: deleted_preset_index == index && preset_deleted ? transparent_colour : preset_deleting_mode ? delete_colour : preset_renaming_mode ? rename_colour : transparent_colour;
-        
-                                            animate background {
-                                                duration: 0.2s;
+                                restore := BasicButton { // Restore locked values preset
+                                    enabled: (!preset_renaming_mode && !preset_deleting_mode && !input_playback && can_delete && locked) || input_recording;
+    
+                                    Rectangle {
+                                        border-radius: 8px;
+                                        background: #ffffff00;
+    
+                                        VerticalLayout { // Layout items vertically
+                                            spacing: !locked ? 0px : 4px;
+                                            alignment: start;
+    
+                                            animate spacing {
+                                                duration: 0.3s;
                                             }
-        
-                                            VerticalLayout {
-                                                padding: deleted_preset_index == index && preset_deleted ? 0px : preset_deleting_mode || preset_renaming_mode ? 8px: 0px;
-                                                spacing: preset_renaming_mode || (deleted_preset_index == index && preset_deleted) ? 0px : 4px;
-                                                alignment: start;
-        
-                                                animate padding, spacing {
+                
+                                            HeadingSmall { // Name of preset
+                                                text: "Restore values";
+                                                font-size: !locked ? 1px : 12px;
+                                                opacity: !locked ? 0% : 100%;
+    
+                                                animate font-size, opacity {
                                                     duration: 0.2s;
                                                     easing: ease-in-out-circ;
                                                 }
-        
-                                                if preset_renaming_mode:
-                                                TextInput {
-                                                    text: preset_names[index];
-                                                    font-weight: 700;
-        
-                                                    edited => {
-                                                        preset_names[index] = self.text;
-                                                    }
-                                                }
+                                            }
                     
-                                                if !preset_renaming_mode:
-                                                HeadingSmall {
-                                                    text: preset_names[index];
-                                                    font-size: (deleted_preset_index == index && preset_deleted) || (new_preset_created && index == preset_names.length - 1) ? 1px : 12px;
-                                                    opacity: (deleted_preset_index == index && preset_deleted) || (new_preset_created && index == preset_names.length - 1) ? 0% : 100%;
-        
-                                                    animate font-size, opacity {
-                                                        duration: 0.2s;
-                                                        easing: ease-in-out-circ;
-                                                    }
-                                                }
-                        
-                                                NormalText {
-                                                    text: "\{preset[0]}  \{preset[1]}  \{preset[2]}  \{preset[3]}  \{preset[4]}  \{preset[5]}";
-                                                    vertical-alignment: center;
-                                                    font-size: preset_renaming_mode || (deleted_preset_index == index && preset_deleted) || (new_preset_created && index == preset_names.length - 1) ? 1px : 12px;
-                                                    opacity: preset_renaming_mode || (deleted_preset_index == index && preset_deleted) || (new_preset_created && index == preset_names.length - 1) ? 0% : 100%;
-        
-                                                    animate font-size, opacity {
-                                                        duration: 0.2s;
-                                                        easing: ease-in-out-circ;
-                                                    }
-                                                }
-                                            }
-                                        }
-
-                                        clicked => {
-                                            if preset_deleting_mode {
-                                                if can_delete {
-                                                    can_delete = false;
-                                                    should_delete = true;
-                                                    deleted_preset_index = index;
-                                                    preset_deleted = true;
-                                                }
-                                            } else {
-                                                current_dial_values = preset;
-                                                save_dial_edits();
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                                            NormalText { // Preset values
+                                                text: "\{dial_values_when_locked[current_recording][0]}  \{dial_values_when_locked[current_recording][1]}  \{dial_values_when_locked[current_recording][2]}  \{dial_values_when_locked[current_recording][3]}  \{dial_values_when_locked[current_recording][4]}  \{dial_values_when_locked[current_recording][5]}";
+                                                vertical-alignment: center;
+                                                font-size: !locked ? 1px : 12px;
+                                                opacity: !locked ? 0% : 100%;
+                                                color: restore.enabled ? white : generic_disabled;
     
-                        VerticalLayout {
-                            spacing: 12px;
-        
-                            ShadowedRectangle {
-                                height: 0%;
-        
-                                HorizontalLayout {
-                                    padding: 12px;
-                                    alignment: start;
-                                    spacing: 8px;
-            
-                                    HeadingLarge {
-                                        text: "Presets";
-                                        vertical-alignment: center;
-                                    }
-            
-                                    add := BasicButton {
-                                        enabled: !locked;
-            
-                                        StatusImageLarge {
-                                            source: @image-url("icons/plus.svg");
-                                            colorize: add.enabled ? white : generic_disabled;
-            
-                                            animate colorize {
-                                                duration: 0.2s;
-                                            }
-                                        }
-            
-                                        clicked => {
-                                            new_preset_created = true;
-                                            save();
-                                        }
-                                    }
-            
-                                    if preset_renaming_mode:
-                                    BasicButton {
-            
-                                        StatusImageSmall {
-                                            source: @image-url("icons/check.svg");
-                                        }
-            
-                                        clicked => {
-                                            preset_renaming_mode = !preset_renaming_mode;
-                                            preset_renamed = true;
-                                        }
-                                    }
-            
-                                    if !preset_renaming_mode:
-                                    preset_rename := TouchArea {
-                                        mouse-cursor: pointer;
-                                        enabled: !locked;
-            
-                                        StatusImageSmall {
-                                            source: @image-url("icons/rename.svg");
-                                            colorize: preset_rename.enabled ? white : generic_disabled;
-            
-                                            animate colorize {
-                                                duration: 0.2s;
-                                            }
-                                        }
-            
-                                        clicked => {
-                                            preset_deleting_mode = false;
-                                            preset_renaming_mode = !preset_renaming_mode;
-                                        }
-                                    }
-            
-                                    if preset_deleting_mode:
-                                    BasicButton {
-            
-                                        StatusImageSmall {
-                                            source: @image-url("icons/check.svg");
-                                        }
-            
-                                        clicked => {
-                                            preset_deleting_mode = !preset_deleting_mode;
-                                        }
-                                    }
-            
-                                    if !preset_deleting_mode:
-                                    preset_delete := BasicButton {
-                                        enabled: !locked;
-            
-                                        StatusImageSmall {
-                                            source: @image-url("icons/trash.svg");
-                                            colorize: preset_delete.enabled ? white : generic_disabled;
-            
-                                            animate colorize {
-                                                duration: 0.2s;
-                                            }
-                                        }
-            
-                                        clicked => {
-                                            preset_renaming_mode = false;
-                                            preset_deleting_mode = !preset_deleting_mode;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-    
-                    // Recordings
-                    Rectangle {
-                        height: 100%;
-    
-                        ScrollView {
-                            vertical-scrollbar-policy: always-off;
-    
-                            VerticalLayout {
-                                alignment: start;
-                                padding-top: 56px;
-                                padding-bottom: 112px;
-    
-                                for recording[index] in recording_values:
-                                BasicButton {
-                                    enabled: !recording_renaming_mode && can_delete;
-
-                                    VerticalLayout {
-                                        padding-bottom: (recording_deleting_mode && recording_deleted && (deleted_recording_index - 1 == index || deleted_recording_index == index)) ? 0px : recording_renaming_mode ? 4px : 8px;
-                                        padding-top: (recording_deleting_mode && recording_deleted && (deleted_recording_index + 1 == index || deleted_recording_index == index)) ? 0px : recording_renaming_mode ? 4px : 8px;
-
-                                        animate padding-top, padding-bottom {
-                                            duration: 0.2s;
-                                            easing: ease-in-out-circ;
-                                        }
-
-                                        Rectangle {
-                                            border-radius: 8px;
-                                            border-width: 1px;
-                                            border-color: current_recording == index && !recording_deleting_mode && !recording_renaming_mode && !(new_recording && index == recording_names.length - 1) ? recording_border_colour : transparent_colour;
-                                            background: deleted_recording_index == index && recording_deleted ? transparent_colour : recording_deleting_mode ? delete_colour : recording_renaming_mode ? rename_colour : transparent_colour;
-                                            
-                                            animate background, border-color {
-                                                duration: 0.2s;
-                                            }
-                        
-                                            VerticalLayout {
-                                                padding: deleted_recording_index == index && recording_deleted ? 0px : recording_deleting_mode || current_recording == index || recording_renaming_mode ? 8px: 0px;
-                                                spacing: recording_renaming_mode || (deleted_recording_index == index && recording_deleted) || (new_recording && index == recording_names.length - 1) ? 0px : 4px;
-                                                alignment: start;
-        
-                                                animate padding, spacing {
+                                                animate font-size, opacity, color {
                                                     duration: 0.2s;
                                                     easing: ease-in-out-circ;
-                                                }
-        
-                                                if recording_renaming_mode:
-                                                TextInput {
-                                                    text: recording_names[index];
-                                                    font-weight: 700;
-        
-                                                    edited => {
-                                                        recording_names[index] = self.text;
-                                                    }
-                                                }
-                    
-                                                if !recording_renaming_mode:
-                                                HeadingSmall {
-                                                    text: recording_names[index];
-                                                    font-size: recording_renaming_mode || (deleted_recording_index == index && recording_deleted) || (new_recording && index == recording_names.length - 1) ? 1px : 12px;
-                                                    opacity: recording_renaming_mode || (deleted_recording_index == index && recording_deleted) || (new_recording && index == recording_names.length - 1) ? 0% : 100%;
-        
-                                                    animate font-size, opacity {
-                                                        duration: 0.2s;
-                                                        easing: ease-in-out-circ;
-                                                    }
-                                                }
-                        
-                                                NormalText {
-                                                    text: input_recording || locked ? "\{dial_values_when_locked[index][0]}  \{dial_values_when_locked[index][1]}  \{dial_values_when_locked[index][2]}  \{dial_values_when_locked[index][3]}  \{dial_values_when_locked[index][4]}  \{dial_values_when_locked[index][5]}" : "\{recording[0]}  \{recording[1]}  \{recording[2]}  \{recording[3]}  \{recording[4]}  \{recording[5]}";
-                                                    vertical-alignment: center;
-                                                    font-size: recording_renaming_mode || (deleted_recording_index == index && recording_deleted) || (new_recording && index == recording_names.length - 1) ? 1px : 12px;
-                                                    opacity: recording_renaming_mode || (deleted_recording_index == index && recording_deleted) || (new_recording && index == recording_names.length - 1) ? 0% : 100%;
-                                                    color: locked || input_recording || input_playback ? generic_disabled : white;
-        
-                                                    animate font-size, opacity, color {
-                                                        duration: 0.2s;
-                                                        easing: ease-in-out-circ;
-                                                    }
                                                 }
                                             }
                                         }
                                     }
     
                                     clicked => {
-                                        if recording_deleting_mode {
-                                            can_delete = false;
-                                            deleted_recording_index = index;
-                                            deleted_recording_name = recording_names[index];
-                                            recording_deleted = true;
-                                            should_delete = true;
-                                        } else {
-                                            if index != current_recording {
-                                                current_recording = index;
-                                                sync_current_dial_values_with_recording_values();
-                                                play_audio(PlaybackAction.SendFile);
+                                        sync_with_locked_values(); // Set dial values to locked values
+                                    }
+                                }
+                            }
+
+                            // For each preset
+                            for preset[index] in preset_values:
+                            VerticalLayout { // Layout items vertically
+                                padding-top: preset_deleting_mode && preset_deleted && (deleted_preset_index + 1 == index || deleted_preset_index == index) ? 0px : preset_renaming_mode ? 4px : 8px;
+                                padding-bottom: preset_deleting_mode && preset_deleted && (deleted_preset_index - 1 == index || deleted_preset_index == index) ? 0px : preset_renaming_mode ? 4px : 8px;
+
+                                animate padding-top, padding-bottom {
+                                    duration: 0.2s;
+                                    easing: ease-in-out-circ;
+                                }
+
+                                BasicButton {
+                                    enabled: (!preset_renaming_mode && !input_playback) || input_recording;
+
+                                    Rectangle { // Used for background colour of presets
+                                        border-radius: 8px;
+                                        background: deleted_preset_index == index && preset_deleted ? transparent_colour : preset_deleting_mode ? delete_colour : preset_renaming_mode ? rename_colour : transparent_colour;
+    
+                                        animate background {
+                                            duration: 0.2s;
+                                        }
+    
+                                        VerticalLayout { // Aligns preset names and values vertically
+                                            padding: deleted_preset_index == index && preset_deleted ? 0px : preset_deleting_mode || preset_renaming_mode ? 8px: 0px;
+                                            spacing: preset_renaming_mode || (deleted_preset_index == index && preset_deleted) ? 0px : 4px;
+                                            alignment: start;
+    
+                                            animate padding, spacing {
+                                                duration: 0.2s;
+                                                easing: ease-in-out-circ;
                                             }
+    
+                                            if preset_renaming_mode:
+                                            TextInput { // If renaming presets, allow preset name to be selected and edited
+                                                text: preset_names[index];
+                                                font-weight: 700;
+    
+                                                edited => { // Sets the corresponding name in the preset list to the edited value
+                                                    preset_names[index] = self.text;
+                                                }
+                                            }
+                
+                                            if !preset_renaming_mode:
+                                            HeadingSmall { // If not renaming preset, don't allow text to be selected or edited
+                                                text: preset_names[index];
+                                                font-size: (deleted_preset_index == index && preset_deleted) || (new_preset_created && index == preset_names.length - 1) ? 1px : 12px;
+                                                opacity: (deleted_preset_index == index && preset_deleted) || (new_preset_created && index == preset_names.length - 1) ? 0% : 100%;
+    
+                                                animate font-size, opacity {
+                                                    duration: 0.2s;
+                                                    easing: ease-in-out-circ;
+                                                }
+                                            }
+                    
+                                            NormalText { // Preset dial values
+                                                text: "\{preset[0]}  \{preset[1]}  \{preset[2]}  \{preset[3]}  \{preset[4]}  \{preset[5]}";
+                                                vertical-alignment: center;
+                                                font-size: preset_renaming_mode || (deleted_preset_index == index && preset_deleted) || (new_preset_created && index == preset_names.length - 1) ? 1px : 12px;
+                                                opacity: preset_renaming_mode || (deleted_preset_index == index && preset_deleted) || (new_preset_created && index == preset_names.length - 1) ? 0% : 100%;
+    
+                                                animate font-size, opacity {
+                                                    duration: 0.2s;
+                                                    easing: ease-in-out-circ;
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    clicked => {
+                                        if preset_deleting_mode { // If clicked in preset deleting mode then delete preset
+                                            if can_delete {
+                                                can_delete = false;
+                                                should_delete = true;
+                                                deleted_preset_index = index;
+                                                preset_deleted = true;
+                                            }
+                                        } else { // Otherwise set and save the new dial values
+                                            current_dial_values = preset;
+                                            save_dial_edits();
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    VerticalLayout { // Preset status bar
+                        spacing: 12px;
+    
+                        ShadowedRectangle { // Status bar style
+                            height: 0%;
+    
+                            HorizontalLayout { // Layout status bar items horiontally
+                                padding: 12px;
+                                alignment: start;
+                                spacing: 8px;
+        
+                                HeadingLarge { // Preset bar name
+                                    text: "Presets";
+                                    vertical-alignment: center;
+                                }
+        
+                                add := BasicButton { // Add new preset button
+                                    enabled: !locked;
+        
+                                    StatusImageLarge { // Plus icon
+                                        source: @image-url("icons/plus.svg");
+                                        colorize: add.enabled ? white : generic_disabled;
+        
+                                        animate colorize {
+                                            duration: 0.2s;
+                                        }
+                                    }
+        
+                                    clicked => { // Create a new preset when clicked
+                                        new_preset_created = true;
+                                        save();
+                                    }
+                                }
+        
+                                // If renaming presets then show a check image
+                                if preset_renaming_mode:
+                                BasicButton {
+        
+                                    StatusImageSmall {
+                                        source: @image-url("icons/check.svg");
+                                    }
+        
+                                    clicked => {
+                                        preset_renaming_mode = !preset_renaming_mode;
+                                        preset_renamed = true;
+                                    }
+                                }
+        
+                                // If not renaming presets then show a pen image
+                                if !preset_renaming_mode:
+                                preset_rename := TouchArea {
+                                    mouse-cursor: pointer;
+                                    enabled: !locked;
+        
+                                    StatusImageSmall {
+                                        source: @image-url("icons/rename.svg");
+                                        colorize: preset_rename.enabled ? white : generic_disabled;
+        
+                                        animate colorize {
+                                            duration: 0.2s;
+                                        }
+                                    }
+        
+                                    clicked => {
+                                        preset_deleting_mode = false;
+                                        preset_renaming_mode = !preset_renaming_mode;
+                                    }
+                                }
+        
+                                // If deleting presets then show a check image
+                                if preset_deleting_mode:
+                                BasicButton {
+        
+                                    StatusImageSmall {
+                                        source: @image-url("icons/check.svg");
+                                    }
+        
+                                    clicked => {
+                                        preset_deleting_mode = !preset_deleting_mode;
+                                    }
+                                }
+        
+                                // If not deleiting presets then show a trash image
+                                if !preset_deleting_mode:
+                                preset_delete := BasicButton {
+                                    enabled: !locked;
+        
+                                    StatusImageSmall {
+                                        source: @image-url("icons/trash.svg");
+                                        colorize: preset_delete.enabled ? white : generic_disabled;
+        
+                                        animate colorize {
+                                            duration: 0.2s;
+                                        }
+                                    }
+        
+                                    clicked => {
+                                        preset_renaming_mode = false;
+                                        preset_deleting_mode = !preset_deleting_mode;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Recordings
+                Rectangle {
+                    height: 100%;
+
+                    ScrollView { // Recording list
+                        vertical-scrollbar-policy: always-off;
+
+                        VerticalLayout { // Layout list items vertically
+                            alignment: start;
+                            padding-top: 56px;
+                            padding-bottom: 112px;
+
+                            for recording[index] in recording_values:
+                            BasicButton {
+                                enabled: !recording_renaming_mode && can_delete;
+
+                                VerticalLayout { // Padding for each recording so that they can shrink individually when deleting
+                                    padding-bottom: (recording_deleting_mode && recording_deleted && (deleted_recording_index - 1 == index || deleted_recording_index == index)) ? 0px : recording_renaming_mode ? 4px : 8px;
+                                    padding-top: (recording_deleting_mode && recording_deleted && (deleted_recording_index + 1 == index || deleted_recording_index == index)) ? 0px : recording_renaming_mode ? 4px : 8px;
+
+                                    animate padding-top, padding-bottom {
+                                        duration: 0.2s;
+                                        easing: ease-in-out-circ;
+                                    }
+
+                                    Rectangle { // Recording border active when selected
+                                        border-radius: 8px;
+                                        border-width: 1px;
+                                        border-color: current_recording == index && !recording_deleting_mode && !recording_renaming_mode && !(new_recording && index == recording_names.length - 1) ? recording_border_colour : transparent_colour;
+                                        background: deleted_recording_index == index && recording_deleted ? transparent_colour : recording_deleting_mode ? delete_colour : recording_renaming_mode ? rename_colour : transparent_colour;
+                                        
+                                        animate background, border-color {
+                                            duration: 0.2s;
+                                        }
+                    
+                                        VerticalLayout { // Layout recording name and values vertically
+                                            padding: deleted_recording_index == index && recording_deleted ? 0px : recording_deleting_mode || current_recording == index || recording_renaming_mode ? 8px: 0px;
+                                            spacing: recording_renaming_mode || (deleted_recording_index == index && recording_deleted) || (new_recording && index == recording_names.length - 1) ? 0px : 4px;
+                                            alignment: start;
+    
+                                            animate padding, spacing {
+                                                duration: 0.2s;
+                                                easing: ease-in-out-circ;
+                                            }
+    
+                                            // If renaming recordings allow for text selection and editing
+                                            if recording_renaming_mode:
+                                            TextInput {
+                                                text: recording_names[index];
+                                                font-weight: 700;
+    
+                                                edited => {
+                                                    recording_names[index] = self.text;
+                                                }
+                                            }
+                
+                                            // If not renaming recordings don't allow text selection and editing
+                                            if !recording_renaming_mode:
+                                            HeadingSmall {
+                                                text: recording_names[index];
+                                                font-size: recording_renaming_mode || (deleted_recording_index == index && recording_deleted) || (new_recording && index == recording_names.length - 1) ? 1px : 12px;
+                                                opacity: recording_renaming_mode || (deleted_recording_index == index && recording_deleted) || (new_recording && index == recording_names.length - 1) ? 0% : 100%;
+    
+                                                animate font-size, opacity {
+                                                    duration: 0.2s;
+                                                    easing: ease-in-out-circ;
+                                                }
+                                            }
+                    
+                                            NormalText { // Recording values
+                                                text: input_recording || locked ? "\{dial_values_when_locked[index][0]}  \{dial_values_when_locked[index][1]}  \{dial_values_when_locked[index][2]}  \{dial_values_when_locked[index][3]}  \{dial_values_when_locked[index][4]}  \{dial_values_when_locked[index][5]}" : "\{recording[0]}  \{recording[1]}  \{recording[2]}  \{recording[3]}  \{recording[4]}  \{recording[5]}";
+                                                vertical-alignment: center;
+                                                font-size: recording_renaming_mode || (deleted_recording_index == index && recording_deleted) || (new_recording && index == recording_names.length - 1) ? 1px : 12px;
+                                                opacity: recording_renaming_mode || (deleted_recording_index == index && recording_deleted) || (new_recording && index == recording_names.length - 1) ? 0% : 100%;
+                                                color: locked || input_recording || input_playback ? generic_disabled : white;
+    
+                                                animate font-size, opacity, color {
+                                                    duration: 0.2s;
+                                                    easing: ease-in-out-circ;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                clicked => { // Deletes recordings when in recording deleting mode
+                                    if recording_deleting_mode {
+                                        can_delete = false;
+                                        deleted_recording_index = index;
+                                        deleted_recording_name = recording_names[index];
+                                        recording_deleted = true;
+                                        should_delete = true;
+                                    } else { // Otherwise changes current recording and loads the audio to memory
+                                        if index != current_recording {
+                                            current_recording = index;
+                                            sync_current_dial_values_with_recording_values();
+                                            play_audio(PlaybackAction.SendFile);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    VerticalLayout {
+                        spacing: 12px;
+    
+                        ShadowedRectangle { // Recording status bar style
+                            height: 0%;
+    
+                            HorizontalLayout { // Recording status bar layout
+                                padding: 12px;
+                                alignment: start;
+                                spacing: 8px;
+                                
+                                HeadingLarge { // Status bar label
+                                    text: "Recordings";
+                                    vertical-alignment: center;
+                                }
+
+                                // If renaming recordings, show check mark
+                                if recording_renaming_mode:
+                                BasicButton {
+        
+                                    StatusImageSmall {
+                                        source: @image-url("icons/check.svg");
+                                    }
+        
+                                    clicked => {
+                                        recording_renaming_mode = !recording_renaming_mode;
+                                        recording_renamed = true;
+                                    }
+                                }
+        
+                                // If not renaming recordings, show pen
+                                if !recording_renaming_mode:
+                                rename := BasicButton {
+                                    enabled: !recording && !input_recording && !locked && !audio_or_input_playback;
+        
+                                    StatusImageSmall {
+                                        source: @image-url("icons/rename.svg");
+                                        colorize: rename.enabled ? white : generic_disabled;
+        
+                                        animate colorize {
+                                            duration: 0.2s;
+                                        }
+                                    }
+        
+                                    clicked => {
+                                        recording_deleting_mode = false;
+                                        recording_renaming_mode = !recording_renaming_mode;
+                                        if audio_playback { // Pause audio on click
+                                            play_audio(PlaybackAction.Play);
+                                        } else if input_playback {
+                                            play_audio(PlaybackAction.Input);
+                                        } else if input_recording {
+                                            play_audio(PlaybackAction.Capture);
+                                        }
+                                    }
+                                }
+        
+                                should_shuffle := BasicButton {
+                                    enabled: !recording && !input_recording;
+        
+                                    HorizontalLayout {
+        
+                                        // If shuffling, show shuffle button
+                                        if shuffle:
+                                        StatusImageSmall {
+                                            source: @image-url("icons/shuffle.svg");
+                                            colorize: should_shuffle.enabled ? white : generic_disabled;
+            
+                                            animate colorize {
+                                                duration: 0.2s;
+                                            }
+                                        }
+        
+                                        // If not shuffling, in order button
+                                        if !shuffle:
+                                        StatusImageSmall {
+                                            source: @image-url("icons/arrow-right.svg");
+                                            colorize: should_shuffle.enabled ? white : generic_disabled;
+            
+                                            animate colorize {
+                                                duration: 0.2s;
+                                            }
+                                        }
+                                    }
+        
+                                    clicked => { // toggle shuffle and generate shuffle order
+                                        if shuffle {
+                                            shuffle = false;
+                                        } else {
+                                            shuffle = true;
+                                            current_shuffle_index = 0;
+                                            gen_shuffle();
+                                            if !audio_or_input_playback && !input_recording {
+                                                current_recording = shuffle_order[0];
+                                            }
+                                        }
+                                    }
+                                }
+        
+                                type := BasicButton {
+                                    enabled: !recording && !input_recording;
+        
+                                    HorizontalLayout {
+        
+                                        // If playback type equals auto next, show auto next icon
+                                        if playback == PlaybackType.AutoNext:
+                                        StatusImageSmall {
+                                            source: @image-url("icons/skip-forward.svg");
+                                            colorize: type.enabled ? white : generic_disabled;
+            
+                                            animate colorize {
+                                                duration: 0.2s;
+                                            }
+                                        }
+        
+                                        // If playback type equals loop, show loop icon
+                                        if playback == PlaybackType.Loop:
+                                        StatusImageSmall {
+                                            source: @image-url("icons/repeat.svg");
+                                            colorize: type.enabled ? white : generic_disabled;
+            
+                                            animate colorize {
+                                                duration: 0.2s;
+                                            }
+                                        }
+        
+                                        // If playback tyoe equals none, show none icon
+                                        if playback == PlaybackType.None:
+                                        StatusImageSmall {
+                                            source: @image-url("icons/slash.svg");
+                                            colorize: type.enabled ? white : generic_disabled;
+            
+                                            animate colorize {
+                                                duration: 0.2s;
+                                            }
+                                        }
+                                    }
+        
+                                    clicked => { // Swap between all the modes in order
+                                        if playback == PlaybackType.AutoNext {
+                                            playback = PlaybackType.Loop;
+                                        } else if playback == PlaybackType.Loop {
+                                            playback = PlaybackType.None;
+                                        } else if playback == PlaybackType.None {
+                                            playback = PlaybackType.AutoNext;
+                                        }
+                                    }
+                                }
+        
+                                // If locked, show locked icon
+                                if locked:
+                                lock := BasicButton {
+                                    enabled: !recording && !input_recording && !input_playback;
+        
+                                    StatusImageSmall {
+                                        source: @image-url("icons/lock.svg");
+                                        colorize: lock.enabled ? white : generic_disabled;
+        
+                                        animate colorize {
+                                            duration: 0.2s;
+                                        }
+                                    }
+        
+                                    clicked => {
+                                        locked = !locked;
+                                        save_dial_edits(); // Save dial values on click
+                                    }
+                                }
+        
+                                // If unlocked, show unlocked icon
+                                if !locked:
+                                unlock := BasicButton {
+                                    enabled: !recording && !input_recording && !input_playback;
+        
+                                    StatusImageSmall {
+                                        source: @image-url("icons/unlock.svg");
+                                        colorize: unlock.enabled ? white : generic_disabled;
+                                    }
+        
+                                    clicked => { // Sets locked values
+                                        locked = !locked;
+                                        update_locked_values();
+                                        preset_renaming_mode = false;
+                                        preset_deleting_mode = false;
+                                        recording_renaming_mode = false;
+                                        recording_deleting_mode = false;
+                                    }
+                                }
+
+                                // Refresh recording list
+                                refresh := BasicButton {
+                                    enabled: !recording && !input_recording && !recording_deleting_mode && !recording_renaming_mode && !locked && !audio_or_input_playback;
+
+                                    StatusImageSmall {
+                                        source: @image-url("icons/refresh-cw.svg");
+                                        colorize: refresh.enabled ? white : generic_disabled;
+                                    }
+
+                                    clicked => {
+                                        started = true;
+                                        save();
+                                        started = false;
+                                        gen_shuffle();
+                                    }
+                                }
+        
+                                // If deleting reordings, show check icon
+                                if recording_deleting_mode:
+                                BasicButton {
+        
+                                    StatusImageSmall {
+                                        source: @image-url("icons/check.svg");
+                                    }
+        
+                                    clicked => {
+                                        recording_deleting_mode = !recording_deleting_mode;
+                                    }
+                                }
+        
+                                // If not deleting recordings, show trash icon
+                                if !recording_deleting_mode:
+                                trash := BasicButton {
+                                    enabled: !recording && !input_recording && !locked && !audio_or_input_playback && !recording_renaming_mode;
+        
+                                    StatusImageSmall {
+                                        source: @image-url("icons/trash.svg");
+                                        colorize: trash.enabled ? white : generic_disabled;
+        
+                                        animate colorize {
+                                            duration: 0.2s;
+                                        }
+                                    }
+        
+                                    // Stop playback if playing
+                                    clicked => {
+                                        recording_deleting_mode = !recording_deleting_mode;
+                                        recording_renaming_mode = false;
+                                        if audio_playback {
+                                            play_audio(PlaybackAction.Play);
+                                        } else if input_playback {
+                                            play_audio(PlaybackAction.Input);
+                                        } else if input_recording {
+                                            play_audio(PlaybackAction.Capture);
                                         }
                                     }
                                 }
                             }
                         }
     
-                        VerticalLayout {
-                            spacing: 12px;
-        
-                            ShadowedRectangle {
-                                height: 0%;
-        
-                                HorizontalLayout {
-                                    padding: 12px;
-                                    alignment: start;
-                                    spacing: 8px;
-                                    
-                                    HeadingLarge {
-                                        text: "Recordings";
-                                        vertical-alignment: center;
-                                    }
-            
-                                    if recording_renaming_mode:
-                                    BasicButton {
-            
-                                        StatusImageSmall {
-                                            source: @image-url("icons/check.svg");
-                                        }
-            
-                                        clicked => {
-                                            recording_renaming_mode = !recording_renaming_mode;
-                                            recording_renamed = true;
-                                        }
-                                    }
-            
-                                    if !recording_renaming_mode:
-                                    rename := BasicButton {
-                                        enabled: !recording && !input_recording && !locked && !audio_or_input_playback;
-            
-                                        StatusImageSmall {
-                                            source: @image-url("icons/rename.svg");
-                                            colorize: rename.enabled ? white : generic_disabled;
-            
-                                            animate colorize {
-                                                duration: 0.2s;
-                                            }
-                                        }
-            
-                                        clicked => {
-                                            recording_deleting_mode = false;
-                                            recording_renaming_mode = !recording_renaming_mode;
-                                            if audio_playback {
-                                                play_audio(PlaybackAction.Play);
-                                            } else if input_playback {
-                                                play_audio(PlaybackAction.Input);
-                                            } else if input_recording {
-                                                play_audio(PlaybackAction.Capture);
-                                            }
-                                        }
-                                    }
-            
-                                    should_shuffle := BasicButton {
-                                        enabled: !recording && !input_recording;
-            
-                                        HorizontalLayout {
-            
-                                            if shuffle:
-                                            StatusImageSmall {
-                                                source: @image-url("icons/shuffle.svg");
-                                                colorize: should_shuffle.enabled ? white : generic_disabled;
-                
-                                                animate colorize {
-                                                    duration: 0.2s;
-                                                }
-                                            }
-            
-                                            if !shuffle:
-                                            StatusImageSmall {
-                                                source: @image-url("icons/arrow-right.svg");
-                                                colorize: should_shuffle.enabled ? white : generic_disabled;
-                
-                                                animate colorize {
-                                                    duration: 0.2s;
-                                                }
-                                            }
-                                        }
-            
-                                        clicked => {
-                                            if shuffle {
-                                                shuffle = false;
-                                            } else {
-                                                shuffle = true;
-                                                current_shuffle_index = 0;
-                                                gen_shuffle();
-                                                if !audio_or_input_playback && !input_recording {
-                                                    current_recording = shuffle_order[0];
-                                                }
-                                            }
-                                        }
-                                    }
-            
-                                    type := BasicButton {
-                                        enabled: !recording && !input_recording;
-            
-                                        HorizontalLayout {
-            
-                                            if playback == PlaybackType.AutoNext:
-                                            StatusImageSmall {
-                                                source: @image-url("icons/skip-forward.svg");
-                                                colorize: type.enabled ? white : generic_disabled;
-                
-                                                animate colorize {
-                                                    duration: 0.2s;
-                                                }
-                                            }
-            
-                                            if playback == PlaybackType.Loop:
-                                            StatusImageSmall {
-                                                source: @image-url("icons/repeat.svg");
-                                                colorize: type.enabled ? white : generic_disabled;
-                
-                                                animate colorize {
-                                                    duration: 0.2s;
-                                                }
-                                            }
-            
-                                            if playback == PlaybackType.None:
-                                            StatusImageSmall {
-                                                source: @image-url("icons/slash.svg");
-                                                colorize: type.enabled ? white : generic_disabled;
-                
-                                                animate colorize {
-                                                    duration: 0.2s;
-                                                }
-                                            }
-                                        }
-            
-                                        clicked => {
-                                            if playback == PlaybackType.AutoNext {
-                                                playback = PlaybackType.Loop;
-                                            } else if playback == PlaybackType.Loop {
-                                                playback = PlaybackType.None;
-                                            } else if playback == PlaybackType.None {
-                                                playback = PlaybackType.AutoNext;
-                                            }
-                                        }
-                                    }
-            
-                                    if locked:
-                                    lock := BasicButton {
-                                        enabled: !recording && !input_recording && !input_playback;
-            
-                                        StatusImageSmall {
-                                            source: @image-url("icons/lock.svg");
-                                            colorize: lock.enabled ? white : generic_disabled;
-            
-                                            animate colorize {
-                                                duration: 0.2s;
-                                            }
-                                        }
-            
-                                        clicked => {
-                                            locked = !locked;
-                                            save_dial_edits();
-                                        }
-                                    }
-            
-                                    if !locked:
-                                    unlock := BasicButton {
-                                        enabled: !recording && !input_recording && !input_playback;
-            
-                                        StatusImageSmall {
-                                            source: @image-url("icons/unlock.svg");
-                                            colorize: unlock.enabled ? white : generic_disabled;
-                                        }
-            
-                                        clicked => {
-                                            locked = !locked;
-                                            update_locked_values();
-                                            preset_renaming_mode = false;
-                                            preset_deleting_mode = false;
-                                            recording_renaming_mode = false;
-                                            recording_deleting_mode = false;
-                                        }
-                                    }
-
-                                    refresh := BasicButton {
-                                        enabled: !recording && !input_recording && !recording_deleting_mode && !recording_renaming_mode && !locked && !audio_or_input_playback;
-
-                                        StatusImageSmall {
-                                            source: @image-url("icons/refresh-cw.svg");
-                                            colorize: refresh.enabled ? white : generic_disabled;
-                                        }
-
-                                        clicked => {
-                                            started = true;
-                                            save();
-                                            started = false;
-                                            gen_shuffle();
-                                        }
-                                    }
-            
-                                    if recording_deleting_mode:
-                                    BasicButton {
-            
-                                        StatusImageSmall {
-                                            source: @image-url("icons/check.svg");
-                                        }
-            
-                                        clicked => {
-                                            recording_deleting_mode = !recording_deleting_mode;
-                                        }
-                                    }
-            
-                                    if !recording_deleting_mode:
-                                    trash := BasicButton {
-                                        enabled: !recording && !input_recording && !locked && !audio_or_input_playback && !recording_renaming_mode;
-            
-                                        StatusImageSmall {
-                                            source: @image-url("icons/trash.svg");
-                                            colorize: trash.enabled ? white : generic_disabled;
-            
-                                            animate colorize {
-                                                duration: 0.2s;
-                                            }
-                                        }
-            
-                                        clicked => {
-                                            recording_deleting_mode = !recording_deleting_mode;
-                                            recording_renaming_mode = false;
-                                            if audio_playback {
-                                                play_audio(PlaybackAction.Play);
-                                            } else if input_playback {
-                                                play_audio(PlaybackAction.Input);
-                                            } else if input_recording {
-                                                play_audio(PlaybackAction.Capture);
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-        
-                        }
                     }
                 }
             }
 
             // Playback controls
-            VerticalLayout {
+            VerticalLayout { // Layout controls to the bottom of the screen
                 alignment: end;
                 
-                Rectangle {
+                Rectangle { // Gradient on the background of the controls
                     background: transparent_to_background;
 
                     animate background {
                          duration: 0.25s;
                     }
                     
-                    VerticalLayout {
+                    VerticalLayout { // Layout control groups vertically
                         spacing: 12px;
 
                         // Error notifications
@@ -1176,10 +1193,10 @@ export component AppWindow inherits Window {
                         }
             
                         // Control group
-                        HorizontalLayout {
+                        HorizontalLayout { // Control group 1 - skip back, play inputs, play, skip forward
                             spacing: 12px;
             
-                            back := ShadowedButton {
+                            back := ShadowedButton { // Skip back button
                                 enabled: !recording && recording_names.length > 0;
                                 min-width: 100px;
             
@@ -1197,7 +1214,7 @@ export component AppWindow inherits Window {
                                     }
                                 }
             
-                                clicked => {
+                                clicked => { // Skips back and loads new recording
                                     recording_renaming_mode = false;
                                     recording_deleting_mode = false;
                                     calculate_skipped_to_recording(false);
@@ -1206,7 +1223,7 @@ export component AppWindow inherits Window {
                                 }
                             }
             
-                            play_inputs := ShadowedButton {
+                            play_inputs := ShadowedButton { // Play recorded inputs button
                                 enabled: !recording && recording_names.length > 0 && !input_recording;
                                 min-width: 100px;
             
@@ -1214,6 +1231,7 @@ export component AppWindow inherits Window {
                                     padding: 12px;
                                     alignment: center;
             
+                                    // If playing back inputs, show pause icon
                                     if input_playback:
                                     StatusImageLarge {
                                         source: @image-url("icons/pause.svg");
@@ -1224,6 +1242,7 @@ export component AppWindow inherits Window {
                                         }
                                     }
             
+                                    // If not playing inputs, show play icon
                                     if !input_playback:
                                     StatusImageLarge {
                                         source: @image-url("icons/play.svg");
@@ -1242,7 +1261,7 @@ export component AppWindow inherits Window {
                                 }
                             }
 
-                            play := ShadowedButton {
+                            play := ShadowedButton { // Play audio
                                 enabled: !recording && !input_recording && recording_names.length > 0;
                                 min-width: 100px;
 
@@ -1250,6 +1269,7 @@ export component AppWindow inherits Window {
                                     padding: 12px;
                                     alignment: center;
 
+                                    // If playing audio, show pause icon
                                     if audio_playback:
                                     StatusImageLarge {
                                         source: @image-url("icons/pause.svg");
@@ -1260,6 +1280,7 @@ export component AppWindow inherits Window {
                                         }
                                     }
             
+                                    // If not playing audio, show play icon
                                     if !audio_playback:
                                     StatusImageLarge {
                                         source: @image-url("icons/play.svg");
@@ -1278,7 +1299,7 @@ export component AppWindow inherits Window {
                                 }
                             }
             
-                            next := ShadowedButton {
+                            next := ShadowedButton { // Skip next button
                                 enabled: !recording && recording_names.length > 0;
                                 min-width: 100px;
             
@@ -1306,22 +1327,24 @@ export component AppWindow inherits Window {
                             }
                         }
             
-                        HorizontalLayout {
+                        HorizontalLayout { // Record button layout horizontally
                             spacing: 12px;
             
-                            input_capturer := ShadowedButton {
+                            input_capturer := ShadowedButton { // Capture input button
                                 enabled: (!recording && recording_names.length > 0 && !audio_playback && !input_playback) || (input_recording);
                 
                                 HorizontalLayout {
                                     padding: 12px;
                                     alignment: center;
             
+                                    // If recording inputs, show stop recording icon
                                     if input_recording:
                                     StatusImageLarge {
                                         source: @image-url("icons/stop-circle.svg");
                                         colorize: input_capturer.enabled ? input_playback_colour : input_playback_disabled;
                                     }
             
+                                    // If not recording inputs, show start recording icon
                                     if !input_recording:
                                     StatusImageLarge {
                                         source: @image-url("icons/circle.svg");
@@ -1342,19 +1365,21 @@ export component AppWindow inherits Window {
                                 }
                             }
             
-                            recorder := ShadowedButton {
+                            recorder := ShadowedButton { // Audio recording button
                                 enabled: !input_recording && !audio_or_input_playback;
                 
                                 HorizontalLayout {
                                     padding: 12px;
                                     alignment: center;
             
+                                    // If recording, show stop recording icon
                                     if recording:
                                     StatusImageLarge {
                                         source: @image-url("icons/stop-circle.svg");
                                         colorize: recorder.enabled ? play_and_record_colour : play_and_record_disabled;
                                     }
             
+                                    // If not recording, show start recording icon
                                     if !recording:
                                     StatusImageLarge {
                                         source: @image-url("icons/circle.svg");
