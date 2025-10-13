@@ -1799,6 +1799,8 @@ fn main() -> Result<(), Box<dyn STDError>> {
                         // If UI not recording then save and shuffle songs
                         ui.invoke_save();
                         ui.invoke_gen_shuffle();
+                        ui.invoke_skip_audio();
+                        ui.invoke_skip_audio();
                     }
                 }
                 Err(_) => {
