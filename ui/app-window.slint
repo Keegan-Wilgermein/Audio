@@ -903,6 +903,8 @@ export component AppWindow inherits Window {
                                             deleted_recording_name = recording_names[index];
                                             recording_deleted = true;
                                             should_delete = true;
+                                            current_recording = 0;
+                                            skip_audio();
                                         } else { // Otherwise changes current recording and loads the audio to memory
                                             if index != current_recording {
                                                 current_recording = index;
@@ -1131,8 +1133,6 @@ export component AppWindow inherits Window {
             
                                         clicked => {
                                             recording_deleting_mode = !recording_deleting_mode;
-                                            current_recording = 0;
-                                            skip_audio();
                                         }
                                     }
             
