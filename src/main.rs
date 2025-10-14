@@ -2337,7 +2337,7 @@ fn main() -> Result<(), Box<dyn STDError>> {
                                     Err(_) => (),
                                 }
                             }
-                        }
+                        },
                         _ => (),
                     }
                     // Sets all playback UI variables to false and sends error to UI
