@@ -1379,7 +1379,7 @@ fn main() -> Result<(), Box<dyn STDError>> {
                                     Ok(Message::StopAudio) => {
                                         if capturing {
                                             snapshot.frames.remove(0);
-                                            match snapshot.save(&File::truncate(&mut file, ".", 0)) // Saves new snapshot data to file if capturing
+                                            match snapshot.save(&File::truncate(&mut file.clone(), ".", 0)) // Saves new snapshot data to file if capturing
                                             {
                                                 Some(error) => {
                                                     Tracker::write(
@@ -1395,8 +1395,11 @@ fn main() -> Result<(), Box<dyn STDError>> {
                                     Ok(Message::File(_)) => {
                                         if capturing {
                                             snapshot.frames.remove(0);
-                                            match snapshot.save(&File::truncate(&mut file, ".", 0))
-                                            {
+                                            match snapshot.save(&File::truncate(
+                                                &mut file.clone(),
+                                                ".",
+                                                0,
+                                            )) {
                                                 Some(error) => {
                                                     Tracker::write(
                                                         player_error_handle.clone(),
@@ -1411,8 +1414,11 @@ fn main() -> Result<(), Box<dyn STDError>> {
                                     Ok(Message::PlayAudio((Playback::Capture(_), _))) => {
                                         if capturing {
                                             snapshot.frames.remove(0);
-                                            match snapshot.save(&File::truncate(&mut file, ".", 0))
-                                            {
+                                            match snapshot.save(&File::truncate(
+                                                &mut file.clone(),
+                                                ".",
+                                                0,
+                                            )) {
                                                 Some(error) => {
                                                     Tracker::write(
                                                         player_error_handle.clone(),
@@ -1585,7 +1591,7 @@ fn main() -> Result<(), Box<dyn STDError>> {
 
                             if capturing {
                                 // Saves captured inputs to file
-                                match snapshot.save(&File::truncate(&mut file, ".", 0)) {
+                                match snapshot.save(&File::truncate(&mut file.clone(), ".", 0)) {
                                     Some(error) => {
                                         Tracker::write(player_error_handle.clone(), Some(error));
                                     }
@@ -1694,8 +1700,8 @@ fn main() -> Result<(), Box<dyn STDError>> {
                     &settings.recordings,
                     &settings.get_index_data().recording_length,
                 ));
-                *locked = settings.recordings[ui.get_current_recording() as usize].clone();
                 // Sets tracker locked values
+                *locked = settings.recordings[ui.get_current_recording() as usize].clone();
             }
         }
     });
@@ -1761,8 +1767,8 @@ fn main() -> Result<(), Box<dyn STDError>> {
 
             // Aquires read access to the loaded data
             let settings = update_ref_count.read().unwrap();
-            // Save data if not locked
-            if !ui.get_locked() {
+            // Save data if not locked or recording inputs
+            if !ui.get_locked() && !ui.get_input_recording() {
                 match save(DataType::Settings((*settings).clone()), "settings") {
                     Some(error) => {
                         error.send(&ui);
@@ -1936,12 +1942,6 @@ fn main() -> Result<(), Box<dyn STDError>> {
                         }
                     }
                 }
-
-                ui.set_current_dial_values(ModelRc::new(VecModel::from(
-                    // Set dial values
-                    settings.recordings[ui.get_current_recording() as usize]
-                        .parse_vec_from_recording(),
-                )));
             }
         }
     });
@@ -2098,10 +2098,6 @@ fn main() -> Result<(), Box<dyn STDError>> {
                 ui.set_audio_playback(false);
                 ui.set_input_playback(false);
                 ui.set_input_recording(false);
-                ui.set_current_dial_values(ModelRc::new(VecModel::from(
-                    settings.recordings[ui.get_current_recording() as usize]
-                        .parse_vec_from_recording(),
-                )));
                 Message::StopAudio
             } else {
                 ui.set_input_playback(true);
@@ -2170,10 +2166,6 @@ fn main() -> Result<(), Box<dyn STDError>> {
                 ui.set_input_recording(false);
                 ui.set_audio_playback(false);
                 ui.set_input_playback(false);
-                ui.set_current_dial_values(ModelRc::new(VecModel::from(
-                    settings.recordings[ui.get_current_recording() as usize]
-                        .parse_vec_from_recording(),
-                )));
                 ui.set_locked(false);
                 Message::StopAudio
             } else {
@@ -2193,7 +2185,7 @@ fn main() -> Result<(), Box<dyn STDError>> {
         }
     });
 
-    // Update UI when playing is finshed
+    // Update UI when playing is finished
     ui.on_sync_playing_with_backend({
         let ui_handle = ui.as_weak();
 
@@ -2212,17 +2204,6 @@ fn main() -> Result<(), Box<dyn STDError>> {
                 // If finished playing
                 let settings = settings_handle.read().unwrap();
 
-                let snapshot_data = match load(
-                    // Load snapshot data
-                    &settings.recordings[ui.get_current_recording() as usize].name,
-                    LoadType::Snapshot,
-                ) {
-                    Ok(DataType::SnapShot(data)) => data,
-                    _ => {
-                        Error::LoadError.send(&ui);
-                        SnapShot::new()
-                    }
-                };
                 if ui.get_playback() == PlaybackType::None {
                     // If playback type is set to stop playing at the end of the song
                     // Update UI and do nothing
@@ -2238,15 +2219,58 @@ fn main() -> Result<(), Box<dyn STDError>> {
                         ui.set_input_recording(false);
                         ui.set_audio_playback(false);
                         ui.set_input_playback(false);
-                        ui.set_locked(false);
-                        ui.set_current_dial_values(ModelRc::new(VecModel::from(
-                            settings.recordings[ui.get_current_recording() as usize]
-                                .parse_vec_from_recording(),
-                        )));
                         Message::StopAudio
                     } else {
+                        if ui.get_playback() == PlaybackType::AutoNext {
+                            // If auto skipping
+                            let settings = settings_handle.read().unwrap();
+                            // Skips to first recording if on last recording, otherwise skips to next recording
+                            // Also handles shuffle logic
+                            if ui.get_shuffle() && settings.get_index_data().recording_length > 2 {
+                                if ui.get_current_shuffle_index()
+                                    == (ui.get_shuffle_order().row_count() - 1) as i32
+                                {
+                                    // If on last index in shuffle list, reshuffle and set index to 0
+                                    ui.invoke_gen_shuffle();
+                                    ui.set_current_shuffle_index(0);
+                                } else {
+                                    ui.set_current_shuffle_index(
+                                        ui.get_current_shuffle_index() + 1,
+                                    ); // Otherwise increase shuffle index by one
+                                }
+                                ui.set_current_recording(
+                                    ui.get_shuffle_order()
+                                        .row_data(ui.get_current_shuffle_index() as usize)
+                                        .unwrap(),
+                                ); // Set current recording to shuffle index
+                            } else {
+                                if ui.get_current_recording()
+                                    == (settings.recordings.len() - 1) as i32
+                                {
+                                    ui.set_current_recording(0);
+                                } else {
+                                    ui.set_current_recording(ui.get_current_recording() + 1);
+                                }
+                            }
+                            ui.set_current_dial_values(ModelRc::new(VecModel::from(
+                                settings.recordings[ui.get_current_recording() as usize]
+                                    .parse_vec_from_recording(),
+                            )));
+                            ui.invoke_skip_audio(); // Invokes skip callback
+                        }
+                        let snapshot_data = match load(
+                            // Load snapshot data
+                            &settings.recordings[ui.get_current_recording() as usize].name,
+                            LoadType::Snapshot,
+                        ) {
+                            Ok(DataType::SnapShot(data)) => data,
+                            _ => {
+                                Error::LoadError.send(&ui);
+                                SnapShot::new()
+                            }
+                        };
                         Message::PlayAudio((
-                            // Send the correct play message to UI depending on what buttin has been pressed
+                            // Send the correct play message to UI depending on what button has been pressed
                             if ui.get_audio_playback() {
                                 Playback::Generic(snapshot_data)
                             } else if ui.get_input_playback() {
@@ -2262,16 +2286,6 @@ fn main() -> Result<(), Box<dyn STDError>> {
                             Tracker::write(error_handle.clone(), Some(Error::MessageError));
                         }
                     }
-                } else if ui.get_playback() == PlaybackType::AutoNext {
-                    // If auto skipping
-                    let settings = settings_handle.read().unwrap();
-                    // Skips to first recording if on last recording, otherwise skips to next recording
-                    if ui.get_current_recording() == (settings.recordings.len() - 1) as i32 {
-                        ui.set_current_recording(0);
-                    } else {
-                        ui.set_current_recording(ui.get_current_recording() + 1);
-                    }
-                    ui.invoke_skip_audio(); // Invokes skip callback
                 }
                 Tracker::write(finished.clone(), false);
             }
@@ -2317,6 +2331,7 @@ fn main() -> Result<(), Box<dyn STDError>> {
                             // This ensures that it won't keep failing
                             if ui.get_audio_or_input_playback() || ui.get_input_recording() {
                                 let settings = settings_handle.read().unwrap();
+
                                 let file = if settings.recordings.len() > 0 {
                                     settings.recordings[ui.get_current_recording() as usize]
                                         .name
@@ -2337,7 +2352,7 @@ fn main() -> Result<(), Box<dyn STDError>> {
                                     Err(_) => (),
                                 }
                             }
-                        },
+                        }
                         _ => (),
                     }
                     // Sets all playback UI variables to false and sends error to UI

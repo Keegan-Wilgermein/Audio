@@ -1,6 +1,9 @@
 # Audio
 System wide audio recording, editing, and playback
 
+## Disclaimer
+Don't use this application to distibute copyrighted material
+
 ## How to use
 ### Recording Audio
 - Click the red circle icon to start and stop recording

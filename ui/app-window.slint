@@ -147,10 +147,10 @@ export component AppWindow inherits Window {
     
     // ---- Playback ----
     out property <bool> audio_or_input_playback: audio_playback || input_playback; // True if either play button is playing something
-    in-out property <bool> locked: false; // Prevents dial rotations from being saved to disk and from updating the UI
+    in-out property <bool> locked: false; // Prevents dial rotations from being saved to disk
     in-out property <bool> shuffle: true;
     in-out property <[int]> shuffle_order: [];
-    private property <int> current_shuffle_index: 0;
+    in-out property <int> current_shuffle_index: 0;
     in-out property <PlaybackType> playback: PlaybackType.AutoNext;
     
     // ---- Audio playback ----
@@ -281,7 +281,6 @@ export component AppWindow inherits Window {
 
     // Disables buttons on record and sets locked to false
     function disable_buttons_on_record() {
-        update_locked_values();
         recording_renaming_mode = false;
         recording_deleting_mode = false;
         locked = false;
@@ -302,6 +301,7 @@ export component AppWindow inherits Window {
                 current_recording = shuffle_order[0];
             }
             play_audio(PlaybackAction.SendFile); // Preloads audio
+            current_dial_values = recording_values[current_recording];
         }
     }
 
@@ -348,6 +348,10 @@ export component AppWindow inherits Window {
                 snapshot_dial_update();
             }
             sync_playing_with_backend();
+            if !audio_or_input_playback {
+                sync_with_locked_values();
+                save();
+            }
         }
     }
 
@@ -825,7 +829,7 @@ export component AppWindow inherits Window {
     
                                 for recording[index] in recording_values:
                                 BasicButton {
-                                    enabled: !recording_renaming_mode && can_delete;
+                                    enabled: !recording_renaming_mode && can_delete && !locked;
     
                                     VerticalLayout { // Padding for each recording so that they can shrink individually when deleting
                                         padding-bottom: (recording_deleting_mode && recording_deleted && (deleted_recording_index - 1 == index || deleted_recording_index == index)) ? 0px : recording_renaming_mode ? 4px : 8px;
@@ -909,6 +913,7 @@ export component AppWindow inherits Window {
                                             if index != current_recording {
                                                 current_recording = index;
                                                 sync_current_dial_values_with_recording_values();
+                                                update_locked_values();
                                                 play_audio(PlaybackAction.SendFile);
                                             }
                                         }
@@ -1097,8 +1102,8 @@ export component AppWindow inherits Window {
                                         }
             
                                         clicked => { // Sets locked values
-                                            locked = !locked;
                                             update_locked_values();
+                                            locked = !locked;
                                             preset_renaming_mode = false;
                                             preset_deleting_mode = false;
                                             recording_renaming_mode = false;
@@ -1204,7 +1209,7 @@ export component AppWindow inherits Window {
                             spacing: 12px;
             
                             back := ShadowedButton { // Skip back button
-                                enabled: !recording && recording_names.length > 0;
+                                enabled: !recording && recording_names.length > 0 && !locked;
                                 min-width: 100px;
             
                                 HorizontalLayout {
@@ -1265,6 +1270,10 @@ export component AppWindow inherits Window {
                                     recording_renaming_mode = false;
                                     recording_deleting_mode = false;
                                     play_audio(PlaybackAction.Input);
+                                    if !input_playback {
+                                        sync_with_locked_values();
+                                        save();
+                                    }
                                 }
                             }
 
@@ -1307,7 +1316,7 @@ export component AppWindow inherits Window {
                             }
             
                             next := ShadowedButton { // Skip next button
-                                enabled: !recording && recording_names.length > 0;
+                                enabled: !recording && recording_names.length > 0 && !locked;
                                 min-width: 100px;
             
                                 HorizontalLayout {
@@ -1362,12 +1371,14 @@ export component AppWindow inherits Window {
                                 clicked => {
                                     play_audio(PlaybackAction.Capture);
                                     if input_recording {
-                                        disable_buttons_on_record();
                                         locked = true;
+                                        disable_buttons_on_record();
                                         input_playback = true;
+                                        update_locked_values();
                                     } else {
-                                        current_dial_values = dial_values_when_locked[current_recording];
-                                        save_dial_edits();
+                                        locked = false;
+                                        sync_with_locked_values();
+                                        save();
                                     }
                                 }
                             }
