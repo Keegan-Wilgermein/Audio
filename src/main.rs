@@ -796,7 +796,13 @@ impl Settings {
         let mut dials = [0, 0, 0, 0, 0, 0];
         if self.recordings.len() > 0 {
             for index in 0..6 {
-                dials[index] = ui.get_current_dial_values().row_data(index).unwrap();
+                match ui.get_current_dial_values().row_data(index) {
+                    Some(value) => dials[index] = value,
+                    None => {
+                        dials = [0, 0, 0, 0, 0, 0];
+                        break;
+                    }
+                };
                 // Gets dial values from UI
             }
         }
