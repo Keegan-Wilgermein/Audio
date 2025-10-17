@@ -10,12 +10,16 @@ Don't use this application to distibute copyrighted material
 - Install the slint extension for vs code
 - Install the rust analyser extension for vs code
 - Install the codelldb extension for vs code
-- Run cargo install cargo-bundle in the terminal
 - Navigate to the folder containing the project
-- Run 'cargo update' in the terminal
-- Run 'cargo bundle --release' in the terminal
-- Navigate from the project folder to target > release > bundle > osx
-- Run the application
+- Install these dependencies with 'cargo add {}':
+1. hound
+2. kira
+3. qruhear
+4. rand
+5. savefile
+6. savefile-derive
+7. slint
+- Run 'cargo run --release'
 
 ## How to use
 ### Recording Audio
