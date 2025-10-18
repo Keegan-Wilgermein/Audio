@@ -794,17 +794,15 @@ impl Settings {
         let index_data = self.get_index_data();
 
         let mut dials = [0, 0, 0, 0, 0, 0];
-        if self.recordings.len() > 0 {
-            for index in 0..6 {
-                match ui.get_current_dial_values().row_data(index) {
-                    Some(value) => dials[index] = value,
-                    None => {
-                        dials = [0, 0, 0, 0, 0, 0];
-                        break;
-                    }
-                };
-                // Gets dial values from UI
-            }
+        for index in 0..6 {
+            // Gets dial values from UI
+            match ui.get_current_dial_values().row_data(index) {
+                Some(value) => dials[index] = value,
+                None => {
+                    dials = [0, 0, 0, 0, 0, 0];
+                    break;
+                }
+            };
         }
 
         // Check for new preset creation
@@ -1685,10 +1683,12 @@ fn main() -> Result<(), Box<dyn STDError>> {
 
             if ui.get_current_recording() < settings.recordings.len() as i32 {
                 // Sets dial values to current recording data
-                ui.set_current_dial_values(ModelRc::new(VecModel::from(
-                    settings.recordings[ui.get_current_recording() as usize]
-                        .parse_vec_from_recording(),
-                )));
+                if settings.recordings.len() > 0 {
+                    ui.set_current_dial_values(ModelRc::new(VecModel::from(
+                        settings.recordings[ui.get_current_recording() as usize]
+                            .parse_vec_from_recording(),
+                    )));
+                }
             }
         }
     });
@@ -1744,9 +1744,12 @@ fn main() -> Result<(), Box<dyn STDError>> {
             settings.recordings[ui.get_current_recording() as usize].pan = locked.pan;
 
             // Sets dials to locked values
-            ui.set_current_dial_values(ModelRc::new(VecModel::from(
-                settings.recordings[ui.get_current_recording() as usize].parse_vec_from_recording(),
-            )));
+            if settings.recordings.len() > 0 {
+                ui.set_current_dial_values(ModelRc::new(VecModel::from(
+                    settings.recordings[ui.get_current_recording() as usize]
+                        .parse_vec_from_recording(),
+                )));
+            }
         }
     });
 
@@ -2035,10 +2038,12 @@ fn main() -> Result<(), Box<dyn STDError>> {
                 }
             }
 
-            ui.set_current_dial_values(ModelRc::new(VecModel::from(
-                // Update dial values
-                settings.recordings[ui.get_current_recording() as usize].parse_vec_from_recording(),
-            )));
+            if settings.recordings.len() > 0 {
+                ui.set_current_dial_values(ModelRc::new(VecModel::from(
+                    settings.recordings[ui.get_current_recording() as usize]
+                        .parse_vec_from_recording(),
+                )));
+            }
         }
     });
 

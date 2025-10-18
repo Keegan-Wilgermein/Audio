@@ -217,7 +217,7 @@ export component AppWindow inherits Window {
     }
 
     function sync_current_dial_values_with_recording_values() { // Sets current dial values to the recording values
-        if recording_names.length > 1 {
+        if recording_names.length > 0 {
             current_dial_values = recording_values[current_recording];
         }
     }
