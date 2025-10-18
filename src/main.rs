@@ -1296,7 +1296,7 @@ fn main() -> Result<(), Box<dyn STDError>> {
                                 continue 'one;
                             }
                         };
-                    },
+                    }
                     _ => {
                         Tracker::write(player_error_handle.clone(), Some(Error::MessageError));
                         continue 'one;
@@ -2370,7 +2370,7 @@ fn main() -> Result<(), Box<dyn STDError>> {
                                     Err(_) => (),
                                 }
                             }
-                        },
+                        }
                         Error::ReadError => {
                             // Load new data
                             let settings = settings_handle.read().unwrap();
@@ -2394,7 +2394,10 @@ fn main() -> Result<(), Box<dyn STDError>> {
                                 match sender.send(Message::File(format!("{}/{}.wav", path, file))) {
                                     Ok(_) => (),
                                     Err(_) => {
-                                        Tracker::write(error_handle.clone(), Some(Error::PlaybackError));
+                                        Tracker::write(
+                                            error_handle.clone(),
+                                            Some(Error::PlaybackError),
+                                        );
                                     }
                                 }
                             }
