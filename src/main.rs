@@ -1244,6 +1244,14 @@ fn main() -> Result<(), Box<dyn STDError>> {
                         }
                         None => (),
                     }
+                } else {
+                    match SnapShot::create(&File::truncate(&mut new_name, ".", 0)) {
+                        // Creates a new snapshot if there's a file but no snapshots
+                        Some(error) => {
+                            Tracker::write(record_error_handle.clone(), Some(error));
+                        }
+                        None => (),
+                    }
                 }
             }
         }) {
@@ -1288,7 +1296,7 @@ fn main() -> Result<(), Box<dyn STDError>> {
                                 continue 'one;
                             }
                         };
-                    }
+                    },
                     _ => {
                         Tracker::write(player_error_handle.clone(), Some(Error::MessageError));
                         continue 'one;
@@ -1415,7 +1423,7 @@ fn main() -> Result<(), Box<dyn STDError>> {
                                                 None => (),
                                             };
                                         }
-                                        break 'two; // Loads new audio data
+                                        continue 'one; // Loads new audio data
                                     }
                                     Ok(Message::PlayAudio((Playback::Capture(_), _))) => {
                                         if capturing {
@@ -1806,18 +1814,15 @@ fn main() -> Result<(), Box<dyn STDError>> {
                 ui.set_recording(true);
                 Message::StartRecording
             }) {
-                Ok(_) => {
-                    if !ui.get_recording() {
-                        // If UI not recording then save and shuffle songs
-                        ui.invoke_save();
-                        ui.invoke_gen_shuffle();
-                        ui.invoke_skip_audio();
-                        ui.invoke_skip_audio();
-                    }
-                }
+                Ok(_) => (),
                 Err(_) => {
                     Tracker::write(error_handle.clone(), Some(Error::MessageError));
                 }
+            }
+            if !ui.get_recording() {
+                // If UI not recording then save and shuffle songs
+                ui.invoke_save();
+                ui.invoke_gen_shuffle();
             }
         }
     });
@@ -2213,6 +2218,11 @@ fn main() -> Result<(), Box<dyn STDError>> {
                 if ui.get_playback() == PlaybackType::None {
                     // If playback type is set to stop playing at the end of the song
                     // Update UI and do nothing
+                    if ui.get_input_playback() || ui.get_input_recording() {
+                        drop(settings);
+                        ui.invoke_sync_with_locked_values();
+                        ui.invoke_save();
+                    }
                     ui.set_input_recording(false);
                     ui.set_audio_playback(false);
                     ui.set_input_playback(false);
@@ -2225,6 +2235,9 @@ fn main() -> Result<(), Box<dyn STDError>> {
                         ui.set_input_recording(false);
                         ui.set_audio_playback(false);
                         ui.set_input_playback(false);
+                        drop(settings);
+                        ui.invoke_sync_with_locked_values();
+                        ui.invoke_save();
                         Message::StopAudio
                     } else {
                         if ui.get_playback() == PlaybackType::AutoNext {
@@ -2258,10 +2271,9 @@ fn main() -> Result<(), Box<dyn STDError>> {
                                     ui.set_current_recording(ui.get_current_recording() + 1);
                                 }
                             }
-                            ui.set_current_dial_values(ModelRc::new(VecModel::from(
-                                settings.recordings[ui.get_current_recording() as usize]
-                                    .parse_vec_from_recording(),
-                            )));
+                            // drop(settings);
+                            // ui.invoke_sync_with_locked_values();
+                            // ui.invoke_save();
                             ui.invoke_skip_audio(); // Invokes skip callback
                         }
                         let snapshot_data = match load(
@@ -2356,6 +2368,34 @@ fn main() -> Result<(), Box<dyn STDError>> {
                                 match sender.send(Message::File(format!("{}/{}.wav", path, file))) {
                                     Ok(_) => (),
                                     Err(_) => (),
+                                }
+                            }
+                        },
+                        Error::ReadError => {
+                            // Load new data
+                            let settings = settings_handle.read().unwrap();
+                            let file = if settings.recordings.len() > 0 {
+                                settings.recordings[ui.get_current_recording() as usize]
+                                    .name
+                                    .clone()
+                            } else {
+                                String::new()
+                            };
+
+                            let path = match File::get_directory() {
+                                Ok(value) => value,
+                                Err(error) => {
+                                    error.send(&ui);
+                                    String::new()
+                                }
+                            };
+
+                            for _ in 0..2 {
+                                match sender.send(Message::File(format!("{}/{}.wav", path, file))) {
+                                    Ok(_) => (),
+                                    Err(_) => {
+                                        Tracker::write(error_handle.clone(), Some(Error::PlaybackError));
+                                    }
                                 }
                             }
                         }

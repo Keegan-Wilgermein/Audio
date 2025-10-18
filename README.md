@@ -11,15 +11,28 @@ Don't use this application to distibute copyrighted material
 - Install the rust analyser extension for vs code
 - Install the codelldb extension for vs code
 - Navigate to the folder containing the project
-- Install these dependencies with 'cargo add {}':
-1. hound
-2. kira
-3. qruhear
-4. rand
-5. savefile
-6. savefile-derive
-7. slint
-- Run 'cargo run --release'
+- Paste the following text into your cargo.toml file:
+```
+[dependencies]
+hound = "3.5.1"
+kira = "0.10.8"
+qruhear = "0.1.1"
+rand = "0.9.2"
+savefile = "0.19.0"
+savefile-derive = "0.19.0"
+slint = "1.12.1"
+
+[build-dependencies]
+slint-build = "1.12.1"
+```
+- Run ```cargo run --release```
+
+If this does not work then:
+- Follow all the previous installation steps
+- Create a new slint project using the rust template
+- Paste the above dependencies into the cargo.toml file
+- Paste the code from the repo directly into your own files and run the project
+- Don't forget to download the images
 
 ## How to use
 ### Recording Audio
