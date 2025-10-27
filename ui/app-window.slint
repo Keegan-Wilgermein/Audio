@@ -456,7 +456,7 @@ export component AppWindow inherits Window {
                                                 source: @image-url("icons/dial.svg");
                                                 height: 40px;
                                                 width: 60px;
-                                                rotation-angle: current_dial_values[index2 + (index * 3)] * 20deg;
+                                                transform-rotation: current_dial_values[index2 + (index * 3)] * 20deg;
                                                 colorize: rotator.enabled ? white : generic_disabled;
 
                                                 animate colorize {

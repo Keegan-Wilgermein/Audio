@@ -1449,7 +1449,11 @@ fn main() -> Result<(), Box<dyn STDError>> {
                                             snapshot = frames.clone();
                                             Tracker::write(
                                                 player_frame_handle.clone(),
-                                                snapshot.frames[edited_frame].0,
+                                                if snapshot.frames.len() < edited_frame {
+                                                    snapshot.frames[edited_frame].0
+                                                } else {
+                                                    snapshot.frames[snapshot.frames.len() - 1].0
+                                                },
                                             );
                                         }
                                     }
